@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,6 +29,20 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Handle help overlay toggle
+		if msg.String() == "?" {
+			m.showHelp = !m.showHelp
+			return m, nil
+		}
+
+		// If help is shown, only allow '?' and 'q' to close it
+		if m.showHelp {
+			if msg.String() == "q" || msg.String() == "ctrl+c" {
+				return m, tea.Quit
+			}
+			return m, nil
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -175,22 +190,74 @@ func (m AppModel) View() string {
 
 	viewName := []string{"FILE TREE", "VIEWER", "PREVIEW"}[m.currentView]
 	status := statusStyle.Render(
-		fmt.Sprintf("[%s] Tab: switch view | hjkl: navigate | Enter: open | Backspace: up | q: quit", viewName),
+		fmt.Sprintf("[%s] Tab: switch | hjkl: nav | Enter: open | ?: help | q: quit", viewName),
 	)
 
-	return lipgloss.JoinVertical(
+	baseView := lipgloss.JoinVertical(
 		lipgloss.Left,
 		title,
 		content,
 		status,
 	)
+
+	// If help overlay is active, render it on top
+	if m.showHelp {
+		helpOverlay := getHelpOverlay(m.width, m.height)
+
+		return lipgloss.Place(
+			m.width,
+			m.height,
+			lipgloss.Center,
+			lipgloss.Center,
+			helpOverlay,
+			lipgloss.WithWhitespaceChars(" "),
+		)
+	}
+
+	return baseView
 }
 
 func main() {
-	// Get the root path from arguments or use current directory
+	// Define command-line flags
+	var (
+		showHelp     bool
+		showVersion  bool
+		showKeys     bool
+	)
+
+	flag.BoolVar(&showHelp, "help", false, "Show help message")
+	flag.BoolVar(&showHelp, "h", false, "Show help message (shorthand)")
+	flag.BoolVar(&showVersion, "version", false, "Show version information")
+	flag.BoolVar(&showVersion, "v", false, "Show version information (shorthand)")
+	flag.BoolVar(&showKeys, "keys", false, "Show keyboard shortcuts reference")
+	flag.BoolVar(&showKeys, "k", false, "Show keyboard shortcuts reference (shorthand)")
+
+	// Custom usage message
+	flag.Usage = printHelp
+
+	// Parse flags
+	flag.Parse()
+
+	// Handle flags
+	if showHelp {
+		printHelp()
+		os.Exit(0)
+	}
+
+	if showVersion {
+		printVersion()
+		os.Exit(0)
+	}
+
+	if showKeys {
+		printKeyboardShortcuts()
+		os.Exit(0)
+	}
+
+	// Get the root path from remaining arguments or use current directory
 	rootPath := "."
-	if len(os.Args) > 1 {
-		rootPath = os.Args[1]
+	if flag.NArg() > 0 {
+		rootPath = flag.Arg(0)
 	}
 
 	// Resolve to absolute path

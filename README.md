@@ -62,7 +62,57 @@ cd /Users/manu/Documents/LUXOR/PROJECTS/LUMINA/ccn
 go build -o ccn
 ```
 
-### Run
+### Global Installation ✅
+
+The `lumina` command is globally available via symlink:
+
+```bash
+# Symlink location
+~/bin/lumina -> /Users/manu/Documents/LUXOR/PROJECTS/LUMINA/ccn/ccn
+
+# Run from anywhere
+lumina
+
+# Navigate specific directory
+lumina /path/to/docs
+
+# Navigate LUMINA project
+lumina ~/Documents/LUXOR/PROJECTS/LUMINA
+
+# Show help
+lumina --help
+
+# Show version
+lumina --version
+
+# Show keyboard shortcuts
+lumina --keys
+```
+
+### Command-Line Options
+
+| Flag | Shorthand | Description |
+|------|-----------|-------------|
+| `--help` | `-h` | Show help message and usage |
+| `--version` | `-v` | Show version information |
+| `--keys` | `-k` | Show keyboard shortcuts reference |
+
+**Examples**:
+```bash
+# Show help
+lumina -h
+
+# Check version
+lumina -v
+
+# View keyboard shortcuts
+lumina -k
+
+# Navigate with help
+lumina ~/docs  # Then press '?' inside app
+```
+
+### Local Run (from ccn directory)
 
 ```bash
 # Navigate current directory
@@ -82,6 +132,7 @@ go build -o ccn
 #### General Navigation
 - `q` or `Ctrl+C` - Quit application
 - `Tab` - Cycle through panes (File Tree → Viewer → Preview)
+- `?` - Toggle help overlay (keyboard shortcuts reference)
 
 #### File Tree (Left Pane)
 - `j` / `k` or `↓` / `↑` - Navigate up/down file list

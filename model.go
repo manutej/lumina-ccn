@@ -59,6 +59,7 @@ type AppModel struct {
 	currentView   ViewMode
 	selectedFile  string
 	markdownFiles []string
+	showHelp      bool // Toggle for help overlay
 
 	// Content
 	viewerContent    string
