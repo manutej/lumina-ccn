@@ -96,6 +96,16 @@ Added comprehensive Phase 1.5 documentation (2,100+ lines):
 ✅ **Can't tell which pane is active** - High-contrast colors
 ✅ **Long documents hard to navigate** - TOC foundation laid
 
+#### Bugfixes (Post-Testing)
+
+**Commit**: `a931c94` (2025-10-21)
+
+- **Fixed**: Copy functionality was broken - tried to copy from non-existent selection
+  - **Issue**: CopySelection() would fail silently when user pressed 'y' because no selection UI existed
+  - **Solution**: CopySelection() now intelligently copies entire content when no selection is active
+  - **Impact**: Users can now press 'y' to copy entire viewed markdown document
+  - **Testing**: Verified pre-commit hooks pass, copy now works without errors
+
 #### Files Changed
 
 ```
