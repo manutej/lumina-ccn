@@ -72,6 +72,10 @@ type AppModel struct {
 	fileTreeWidth  int // 20% of width
 	viewerWidth    int // 60% of width
 	previewWidth   int // 20% of width
+
+	// NEW: Custom keybindings and clipboard
+	keyBindings *KeyBindings
+	clipboard   *ClipboardManager
 }
 
 // NewAppModel creates a new application model
@@ -90,6 +94,10 @@ func NewAppModel(rootPath string) AppModel {
 	// Initialize markdown renderer (will be updated with actual width later)
 	renderer, _ := utils.NewMarkdownRenderer(80)
 
+	// NEW: Initialize keybindings and clipboard
+	keyBindings := LoadKeyBindings()
+	clipboard := NewClipboardManager()
+
 	return AppModel{
 		rootPath:         rootPath,
 		currentPath:      rootPath,
@@ -99,6 +107,8 @@ func NewAppModel(rootPath string) AppModel {
 		markdownRenderer: renderer,
 		currentView:      FileTreeView,
 		markdownFiles:    findMarkdownFiles(rootPath),
+		keyBindings:      &keyBindings,
+		clipboard:        clipboard,
 	}
 }
 

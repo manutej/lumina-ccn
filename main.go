@@ -49,108 +49,115 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		switch msg.String() {
-		case "q", "ctrl+c":
+		// NEW: Use configurable keybindings
+		viewName := []string{"filetree", "viewer", "preview"}[m.currentView]
+		action := m.keyBindings.FindAction(msg.String(), viewName)
+
+		// If no view-specific action, try "any" view
+		if action == "" {
+			action = m.keyBindings.FindAction(msg.String(), "any")
+		}
+
+		// Execute action
+		switch action {
+		// App controls
+		case "quit":
 			return m, tea.Quit
 
-		case "esc":
-			// ESC as universal cancel/back operation
-			if m.currentView == FileTreeView && m.fileList.FilterState() == list.Filtering {
-				// Cancel filtering if active
-				m.fileList.ResetFilter()
-			} else if m.currentView == FileTreeView {
-				// Navigate up directory when in file tree
-				m.navigateUp()
+		// Navigation
+		case "back":
+			if m.currentView == FileTreeView {
+				if m.fileList.FilterState() == list.Filtering {
+					m.fileList.ResetFilter()
+				} else {
+					m.navigateUp()
+				}
 			}
-			return m, nil
 
-		// Navigation keys
-		case "tab":
-			// Cycle through views
-			m.currentView = (m.currentView + 1) % 3
-			return m, nil
-
-		case "enter":
-			// Navigate into selected file/directory
+		case "open":
 			if m.currentView == FileTreeView {
 				m.navigateToSelectedFile()
 			}
-			return m, nil
 
-		case "backspace", "h":
-			// Navigate up directory
-			if m.currentView == FileTreeView {
-				m.navigateUp()
-			}
-			return m, nil
+		case "switch_view":
+			m.currentView = (m.currentView + 1) % 3
+			m.clipboard.ClearSelection() // Clear selection when switching views
 
-		// Vim-style navigation
-		case "j", "down":
+		// File tree navigation
+		case "down":
 			if m.currentView == FileTreeView {
 				m.fileList, cmd = m.fileList.Update(msg)
-				cmds = append(cmds, cmd)
-			} else if m.currentView == ViewerView {
+			}
+			return m, cmd
+
+		case "up":
+			if m.currentView == FileTreeView {
+				m.fileList, cmd = m.fileList.Update(msg)
+			}
+			return m, cmd
+
+		// Viewer scrolling
+		case "scroll_down":
+			if m.currentView == ViewerView {
 				m.viewer.LineDown(1)
 			}
-			return m, tea.Batch(cmds...)
 
-		case "k", "up":
-			if m.currentView == FileTreeView {
-				m.fileList, cmd = m.fileList.Update(msg)
-				cmds = append(cmds, cmd)
-			} else if m.currentView == ViewerView {
+		case "scroll_up":
+			if m.currentView == ViewerView {
 				m.viewer.LineUp(1)
 			}
-			return m, tea.Batch(cmds...)
 
-		case "g":
-			if m.currentView == ViewerView {
-				m.viewer.GotoTop()
-			}
-			return m, nil
-
-		case "G":
-			if m.currentView == ViewerView {
-				m.viewer.GotoBottom()
-			}
-			return m, nil
-
-		case "d":
+		case "page_down":
 			if m.currentView == ViewerView {
 				m.viewer.HalfViewDown()
 			}
-			return m, nil
 
-		case "u":
+		case "page_up":
 			if m.currentView == ViewerView {
 				m.viewer.HalfViewUp()
 			}
-			return m, nil
 
-		// Option+Arrow keybindings for pagination
-		case "alt+right", "alt+l":
+		case "view_down":
 			if m.currentView == ViewerView {
 				m.viewer.ViewDown()
 			}
-			return m, nil
 
-		case "alt+left", "alt+h":
+		case "view_up":
 			if m.currentView == ViewerView {
 				m.viewer.ViewUp()
 			}
-			return m, nil
 
-		case "alt+down":
+		case "top":
 			if m.currentView == ViewerView {
-				m.viewer.HalfViewDown()
+				m.viewer.GotoTop()
 			}
-			return m, nil
 
-		case "alt+up":
+		case "bottom":
 			if m.currentView == ViewerView {
-				m.viewer.HalfViewUp()
+				m.viewer.GotoBottom()
 			}
-			return m, nil
+
+		// NEW: Copy functionality
+		case "copy":
+			if m.currentView == ViewerView {
+				if err := m.clipboard.CopySelection(m.viewerContent); err == nil {
+					// Copied! Could show status message
+					// For now, selection clears
+					m.clipboard.ClearSelection()
+				}
+			}
+
+		// Filter
+		case "filter":
+			if m.currentView == FileTreeView {
+				// Toggle filter - let bubbles handle it
+				if m.fileList.FilterState() != list.Filtering {
+					m.fileList.SetFilteringEnabled(true)
+				}
+			}
+
+		case "help":
+			m.showHelp = !m.showHelp
 		}
 	}
 
@@ -175,13 +182,15 @@ func (m AppModel) View() string {
 		Foreground(lipgloss.Color("#7D56F4")).
 		Padding(0, 2)
 
+	// NEW: Improved pane colors - high contrast
 	paneStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#874BFD"))
+		BorderForeground(lipgloss.Color("#666666")) // Dark gray (inactive)
 
 	activePaneStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#FF79C6"))
+		BorderForeground(lipgloss.Color("#00D084")). // Bright teal/green (ACTIVE)
+		Bold(true)
 
 	// Header
 	title := titleStyle.Render("Claude Code Navigator (CCN) - " + filepath.Base(m.currentPath))
@@ -237,7 +246,7 @@ func (m AppModel) View() string {
 	case FileTreeView:
 		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: nav | Enter: open | h/Esc: back | /: filter | ?: help | q: quit", viewName)
 	case ViewerView:
-		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | ?: help | q: quit", viewName)
+		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | y: copy | ?: help | q: quit", viewName)
 	case PreviewView:
 		statusText = fmt.Sprintf("[%s] Tab: switch | Coming soon | ?: help | q: quit", viewName)
 	}
