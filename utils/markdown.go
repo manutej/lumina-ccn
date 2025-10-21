@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"os"
+
 	"github.com/charmbracelet/glamour"
 )
 
@@ -8,15 +10,61 @@ import (
 type MarkdownRenderer struct {
 	renderer *glamour.TermRenderer
 	width    int
+	style    string
 }
 
-// NewMarkdownRenderer creates a new markdown renderer
+// MarkdownStyle represents available rendering styles
+type MarkdownStyle string
+
+const (
+	StyleAuto       MarkdownStyle = "auto"        // Auto-detect based on terminal
+	StyleDark       MarkdownStyle = "dark"        // Dark theme (default)
+	StyleLight      MarkdownStyle = "light"       // Light theme
+	StyleDracula    MarkdownStyle = "dracula"     // Dracula theme
+	StyleTokyoNight MarkdownStyle = "tokyo-night" // Tokyo Night theme
+	StylePink       MarkdownStyle = "pink"        // Pink theme
+	StyleNotty      MarkdownStyle = "notty"       // No TTY theme
+)
+
+// NewMarkdownRenderer creates a new markdown renderer with dark theme (default)
 func NewMarkdownRenderer(width int) (*MarkdownRenderer, error) {
-	// Create a glamour renderer with dark style
-	r, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(width),
-	)
+	return NewMarkdownRendererWithStyle(width, StyleDark)
+}
+
+// NewMarkdownRendererWithStyle creates a renderer with a specific style
+func NewMarkdownRendererWithStyle(width int, style MarkdownStyle) (*MarkdownRenderer, error) {
+	var opts []glamour.TermRendererOption
+
+	// Apply style option
+	switch style {
+	case StyleAuto:
+		opts = append(opts, glamour.WithAutoStyle())
+	case StyleDark:
+		opts = append(opts, glamour.WithStylePath("dark"))
+	case StyleLight:
+		opts = append(opts, glamour.WithStylePath("light"))
+	case StyleDracula:
+		opts = append(opts, glamour.WithStylePath("dracula"))
+	case StyleTokyoNight:
+		opts = append(opts, glamour.WithStylePath("tokyo-night"))
+	case StylePink:
+		opts = append(opts, glamour.WithStylePath("pink"))
+	case StyleNotty:
+		opts = append(opts, glamour.WithStylePath("notty"))
+	default:
+		// Check for GLAMOUR_STYLE environment variable
+		if envStyle := os.Getenv("GLAMOUR_STYLE"); envStyle != "" {
+			opts = append(opts, glamour.WithStylePath(envStyle))
+		} else {
+			opts = append(opts, glamour.WithStylePath("dark"))
+		}
+	}
+
+	// Word wrapping
+	opts = append(opts, glamour.WithWordWrap(width))
+
+	// Create renderer
+	r, err := glamour.NewTermRenderer(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -24,6 +72,7 @@ func NewMarkdownRenderer(width int) (*MarkdownRenderer, error) {
 	return &MarkdownRenderer{
 		renderer: r,
 		width:    width,
+		style:    string(style),
 	}, nil
 }
 
@@ -34,16 +83,31 @@ func (m *MarkdownRenderer) Render(content string) (string, error) {
 
 // UpdateWidth updates the renderer width
 func (m *MarkdownRenderer) UpdateWidth(width int) error {
-	// Create a new renderer with updated width
-	r, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(width),
-	)
+	// Create a new renderer with updated width, preserving style
+	style := MarkdownStyle(m.style)
+	renderer, err := NewMarkdownRendererWithStyle(width, style)
 	if err != nil {
 		return err
 	}
 
-	m.renderer = r
+	m.renderer = renderer.renderer
 	m.width = width
 	return nil
+}
+
+// SetStyle changes the rendering style
+func (m *MarkdownRenderer) SetStyle(style MarkdownStyle) error {
+	renderer, err := NewMarkdownRendererWithStyle(m.width, style)
+	if err != nil {
+		return err
+	}
+
+	m.renderer = renderer.renderer
+	m.style = string(style)
+	return nil
+}
+
+// GetStyle returns the current style
+func (m *MarkdownRenderer) GetStyle() string {
+	return m.style
 }

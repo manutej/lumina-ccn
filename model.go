@@ -32,6 +32,9 @@ type FileItem struct {
 func (f FileItem) FilterValue() string { return f.name }
 func (f FileItem) Title() string       { return f.name }
 func (f FileItem) Description() string {
+	if f.name == ".." {
+		return "⬆️  Parent directory"
+	}
 	if f.isDir {
 		return "📁 Directory"
 	}
@@ -103,13 +106,24 @@ func NewAppModel(rootPath string) AppModel {
 func loadDirectory(path string) []list.Item {
 	var items []list.Item
 
+	// Add parent directory entry ".." if not at filesystem root
+	parent := filepath.Dir(path)
+	if parent != path {
+		items = append(items, FileItem{
+			path:  parent,
+			name:  "..",
+			isDir: true,
+			size:  0,
+		})
+	}
+
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return items
 	}
 
 	for _, entry := range entries {
-		// Skip hidden files
+		// Skip hidden files (but not ".." which we already added)
 		if strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
@@ -250,8 +264,10 @@ func (m *AppModel) navigateToSelectedFile() error {
 // navigateUp navigates to the parent directory
 func (m *AppModel) navigateUp() {
 	parent := filepath.Dir(m.currentPath)
-	if parent == m.currentPath || !strings.HasPrefix(parent, m.rootPath) {
-		return // Already at root
+
+	// Only block if we're already at filesystem root
+	if parent == m.currentPath {
+		return // Already at filesystem root (e.g., "/" on Unix)
 	}
 
 	m.currentPath = parent

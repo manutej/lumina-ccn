@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -35,8 +36,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// If help is shown, only allow '?' and 'q' to close it
+		// If help is shown, ESC or ? closes it, other keys are ignored
 		if m.showHelp {
+			if msg.String() == "esc" || msg.String() == "?" {
+				m.showHelp = false
+				return m, nil
+			}
+			// Ignore other keys when help is shown (except quit)
 			if msg.String() == "q" || msg.String() == "ctrl+c" {
 				return m, tea.Quit
 			}
@@ -46,6 +52,17 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+
+		case "esc":
+			// ESC as universal cancel/back operation
+			if m.currentView == FileTreeView && m.fileList.FilterState() == list.Filtering {
+				// Cancel filtering if active
+				m.fileList.ResetFilter()
+			} else if m.currentView == FileTreeView {
+				// Navigate up directory when in file tree
+				m.navigateUp()
+			}
+			return m, nil
 
 		// Navigation keys
 		case "tab":
@@ -105,6 +122,31 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "u":
+			if m.currentView == ViewerView {
+				m.viewer.HalfViewUp()
+			}
+			return m, nil
+
+		// Option+Arrow keybindings for pagination
+		case "alt+right", "alt+l":
+			if m.currentView == ViewerView {
+				m.viewer.ViewDown()
+			}
+			return m, nil
+
+		case "alt+left", "alt+h":
+			if m.currentView == ViewerView {
+				m.viewer.ViewUp()
+			}
+			return m, nil
+
+		case "alt+down":
+			if m.currentView == ViewerView {
+				m.viewer.HalfViewDown()
+			}
+			return m, nil
+
+		case "alt+up":
 			if m.currentView == ViewerView {
 				m.viewer.HalfViewUp()
 			}
@@ -183,15 +225,24 @@ func (m AppModel) View() string {
 		previewPane,
 	)
 
-	// Status bar
+	// Status bar (context-aware based on active pane)
 	statusStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#666666")).
 		Padding(0, 1)
 
 	viewName := []string{"FILE TREE", "VIEWER", "PREVIEW"}[m.currentView]
-	status := statusStyle.Render(
-		fmt.Sprintf("[%s] Tab: switch | hjkl: nav | Enter: open | ?: help | q: quit", viewName),
-	)
+	var statusText string
+
+	switch m.currentView {
+	case FileTreeView:
+		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: nav | Enter: open | h/Esc: back | /: filter | ?: help | q: quit", viewName)
+	case ViewerView:
+		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | ?: help | q: quit", viewName)
+	case PreviewView:
+		statusText = fmt.Sprintf("[%s] Tab: switch | Coming soon | ?: help | q: quit", viewName)
+	}
+
+	status := statusStyle.Render(statusText)
 
 	baseView := lipgloss.JoinVertical(
 		lipgloss.Left,
