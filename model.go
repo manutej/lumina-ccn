@@ -106,7 +106,7 @@ func NewAppModel(rootPath string) AppModel {
 		preview:          preview,
 		markdownRenderer: renderer,
 		currentView:      FileTreeView,
-		markdownFiles:    findMarkdownFiles(rootPath),
+		markdownFiles:    []string{}, // Lazy-load on first use (for global search)
 		keyBindings:      &keyBindings,
 		clipboard:        clipboard,
 	}
