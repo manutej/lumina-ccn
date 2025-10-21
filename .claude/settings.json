@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "project": {
+    "name": "LUMINA (Claude Code Navigator)",
+    "version": "1.0.1-alpha",
+    "phase": "Phase 1.5",
+    "path": "/Users/manu/Documents/LUXOR/PROJECTS/LUMINA/ccn",
+    "description": "A Glow-inspired TUI for navigating Claude Code workflows with beautiful markdown rendering"
+  },
+  "skills": {
+    "enabled": true,
+    "inherit_global": true,
+    "location": "~/.claude/skills",
+    "primary": [
+      "golang-backend-development",
+      "git-workflow-best-practices",
+      "performance-benchmark-specialist"
+    ],
+    "optional": [
+      "docker-compose-orchestration",
+      "ci-cd-pipeline-patterns",
+      "observability-monitoring"
+    ]
+  },
+  "agents": {
+    "enabled": true,
+    "primary": [
+      {
+        "name": "git-genius",
+        "description": "Expert Git operations, workflow management, commit best practices",
+        "when_to_use": "Git operations, versioning, workflow setup, bugfixes"
+      },
+      {
+        "name": "practical-programmer",
+        "description": "DRY, KISS, SOLID principles, pragmatic solutions",
+        "when_to_use": "Code review, refactoring, architecture decisions"
+      }
+    ],
+    "secondary": [
+      {
+        "name": "deep-researcher",
+        "description": "Documentation generation, architecture analysis",
+        "when_to_use": "Technical research, documentation, analysis"
+      },
+      {
+        "name": "debug-detective",
+        "description": "Root cause analysis, issue troubleshooting",
+        "when_to_use": "Bugs, complex issues, interdependencies"
+      }
+    ]
+  },
+  "mcp_servers": {
+    "enabled": true,
+    "context7": {
+      "enabled": true,
+      "description": "Library documentation lookup"
+    },
+    "linear": {
+      "enabled": false,
+      "description": "Issue tracking (future integration)"
+    },
+    "playwright": {
+      "enabled": false,
+      "description": "Browser automation testing (future)"
+    }
+  },
+  "build": {
+    "language": "Go",
+    "go_version": "1.21+",
+    "command": "go build -o lumina",
+    "binary_name": "lumina",
+    "binary_path": "./lumina",
+    "absolute_binary_path": "/Users/manu/Documents/LUXOR/PROJECTS/LUMINA/ccn/lumina",
+    "binary_size_expected": "14-15MB",
+    "architecture": "arm64",
+    "platform": "darwin"
+  },
+  "alias": {
+    "enabled": true,
+    "name": "lumina",
+    "shell_config": "~/.zshrc",
+    "shell_config_path": "/Users/manu/.zshrc",
+    "resolved_path": "/Users/manu/Documents/LUXOR/PROJECTS/LUMINA/ccn/lumina",
+    "auto_setup": true,
+    "auto_rebuild_on_version_change": true
+  },
+  "version_control": {
+    "enabled": true,
+    "strategy": "semantic-versioning",
+    "version_file": "version.go",
+    "changelog_file": "CHANGELOG.md",
+    "git_hooks_enabled": true,
+    "git_hooks": [
+      {
+        "name": "pre-commit",
+        "description": "Format, vet, build checks",
+        "active": true
+      },
+      {
+        "name": "commit-msg",
+        "description": "Conventional commit validation",
+        "active": true
+      },
+      {
+        "name": "pre-push",
+        "description": "Test suite verification",
+        "active": true
+      }
+    ],
+    "conventional_commits": true,
+    "commit_message_format": "{type}({scope}): {subject}",
+    "valid_types": [
+      "feat",
+      "fix",
+      "docs",
+      "style",
+      "refactor",
+      "perf",
+      "test",
+      "chore",
+      "ci"
+    ],
+    "auto_tag_releases": true,
+    "tag_format": "v{version}",
+    "release_script": "./scripts/release.sh"
+  },
+  "testing": {
+    "enabled": false,
+    "framework": "go test",
+    "target_coverage": "60%",
+    "target_new_code_coverage": "70%",
+    "target_critical_paths": "90%",
+    "todo": [
+      "Add unit tests for clipboard module",
+      "Add unit tests for keybindings module",
+      "Add unit tests for TOC parser",
+      "Add integration tests for UI"
+    ]
+  },
+  "development": {
+    "editor": "nano or vim",
+    "formatter": "gofmt",
+    "linter": "go vet",
+    "main_files": [
+      "main.go",
+      "model.go",
+      "keybindings.go",
+      "clipboard.go",
+      "toc.go",
+      "search.go",
+      "version.go",
+      "help.go"
+    ]
+  },
+  "documentation": {
+    "location": "docs/",
+    "key_documents": [
+      "CHANGELOG.md",
+      "VERSION_CONTROL_SUMMARY.md",
+      "DEBUGGING_REPORT_2025-10-21.md",
+      "docs/GIT_QUICK_REFERENCE.md",
+      "docs/GIT_WORKFLOW.md",
+      "docs/GIT_WORKFLOW_ANALYSIS.md",
+      "docs/CONFIG.md",
+      "docs/TOC_INTEGRATION.md",
+      "docs/TESTING_STRATEGY.md"
+    ]
+  },
+  "phases": {
+    "phase_1": {
+      "name": "MVP",
+      "status": "complete",
+      "version": "v1.0.0-alpha",
+      "features": [
+        "File tree navigation",
+        "Markdown viewing",
+        "Basic keybindings",
+        "Help overlay"
+      ]
+    },
+    "phase_1_5": {
+      "name": "Game-Changing Features",
+      "status": "complete",
+      "version": "v1.0.1-alpha",
+      "features": [
+        "Custom keybindings system",
+        "Copy/selection capability (FIXED)",
+        "Improved pane colors",
+        "Table of Contents foundation"
+      ]
+    },
+    "phase_2": {
+      "name": "Search & Navigation",
+      "status": "planned",
+      "features": [
+        "TOC integration in right pane",
+        "Fast file search",
+        "Content search with ripgrep",
+        "File watching & auto-reload"
+      ]
+    },
+    "phase_3": {
+      "name": "Integration & Automation",
+      "status": "planned",
+      "features": [
+        "Editor integration",
+        "Claude Code integration",
+        "Agentic features",
+        "Git awareness"
+      ]
+    }
+  },
+  "useful_commands": {
+    "build": "go build -o lumina",
+    "run": "./lumina",
+    "alias": "lumina",
+    "version": "lumina --version",
+    "help": "lumina --help",
+    "keys": "lumina --keys",
+    "test": "go test ./...",
+    "fmt": "go fmt -w .",
+    "vet": "go vet ./...",
+    "commit": "git commit -m 'type(scope): message'",
+    "release": "./scripts/release.sh v1.x.x"
+  },
+  "permissions": {
+    "auto_approved": [
+      "WebSearch",
+      "WebFetch",
+      "Read",
+      "Write",
+      "Glob",
+      "Grep",
+      "Bash",
+      "Task",
+      "SlashCommand"
+    ]
+  }
+}
