@@ -73,9 +73,10 @@ type AppModel struct {
 	viewerWidth   int // 60% of width
 	previewWidth  int // 20% of width
 
-	// NEW: Custom keybindings and clipboard
-	keyBindings *KeyBindings
-	clipboard   *ClipboardManager
+	// NEW: Custom keybindings, clipboard, and color management
+	keyBindings  *KeyBindings
+	clipboard    *ClipboardManager
+	colorManager *ColorManager
 }
 
 // NewAppModel creates a new application model
@@ -94,9 +95,10 @@ func NewAppModel(rootPath string) AppModel {
 	// Initialize markdown renderer (will be updated with actual width later)
 	renderer, _ := utils.NewMarkdownRenderer(80)
 
-	// NEW: Initialize keybindings and clipboard
+	// NEW: Initialize keybindings, clipboard, and color manager
 	keyBindings := LoadKeyBindings()
 	clipboard := NewClipboardManager()
+	colorManager, _ := NewColorManager()
 
 	return AppModel{
 		rootPath:         rootPath,
@@ -109,6 +111,7 @@ func NewAppModel(rootPath string) AppModel {
 		markdownFiles:    []string{}, // Lazy-load on first use (for global search)
 		keyBindings:      &keyBindings,
 		clipboard:        clipboard,
+		colorManager:     colorManager,
 	}
 }
 

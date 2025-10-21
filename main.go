@@ -176,20 +176,20 @@ func (m AppModel) View() string {
 		return "Loading..."
 	}
 
-	// Define styles
+	// Define styles using color manager
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#7D56F4")).
+		Foreground(lipgloss.Color(m.colorManager.GetColor("title"))).
 		Padding(0, 2)
 
-	// NEW: Improved pane colors - high contrast
+	// Pane colors with theme support
 	paneStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#666666")) // Dark gray (inactive)
+		BorderForeground(lipgloss.Color(m.colorManager.GetColor("inactive-border")))
 
 	activePaneStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#00D084")). // Bright teal/green (ACTIVE)
+		BorderForeground(lipgloss.Color(m.colorManager.GetColor("active-border"))).
 		Bold(true)
 
 	// Header
@@ -234,9 +234,9 @@ func (m AppModel) View() string {
 		previewPane,
 	)
 
-	// Status bar (context-aware based on active pane)
+	// Status bar with theme-aware colors
 	statusStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#666666")).
+		Foreground(lipgloss.Color(m.colorManager.GetColor("status-bar"))).
 		Padding(0, 1)
 
 	viewName := []string{"FILE TREE", "VIEWER", "PREVIEW"}[m.currentView]
@@ -262,7 +262,7 @@ func (m AppModel) View() string {
 
 	// If help overlay is active, render it on top
 	if m.showHelp {
-		helpOverlay := getHelpOverlay(m.width, m.height)
+		helpOverlay := getHelpOverlay(m.width, m.height, m.colorManager)
 
 		return lipgloss.Place(
 			m.width,

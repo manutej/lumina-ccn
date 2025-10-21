@@ -236,23 +236,23 @@ func printKeyboardShortcuts() {
 	fmt.Print(shortcuts.String())
 }
 
-// getHelpOverlay returns a styled help overlay for in-app display
-func getHelpOverlay(width, height int) string {
+// getHelpOverlay returns a styled help overlay for in-app display with theme support
+func getHelpOverlay(width, height int, colorManager *ColorManager) string {
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#FF79C6")).
+		BorderForeground(lipgloss.Color(colorManager.GetColor("help-border"))).
 		Padding(1, 2).
 		Width(width - 4).
 		Height(height - 4)
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#7D56F4")).
+		Foreground(lipgloss.Color(colorManager.GetColor("help-title"))).
 		Align(lipgloss.Center)
 
 	keyStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#8BE9FD"))
+		Foreground(lipgloss.Color(colorManager.GetColor("help-command")))
 
 	content := strings.Builder{}
 

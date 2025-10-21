@@ -26,14 +26,33 @@ const (
 	StyleNotty      MarkdownStyle = "notty"       // No TTY theme
 )
 
-// NewMarkdownRenderer creates a new markdown renderer with dark theme (default)
+// NewMarkdownRenderer creates a new markdown renderer with auto-detected theme
 func NewMarkdownRenderer(width int) (*MarkdownRenderer, error) {
-	return NewMarkdownRendererWithStyle(width, StyleDark)
+	// Use auto-detection for intelligent theme selection based on terminal
+	return NewMarkdownRendererWithStyle(width, StyleAuto)
 }
 
 // NewMarkdownRendererWithStyle creates a renderer with a specific style
 func NewMarkdownRendererWithStyle(width int, style MarkdownStyle) (*MarkdownRenderer, error) {
 	var opts []glamour.TermRendererOption
+
+	// First, check if GLAMOUR_STYLE environment variable is set
+	// This takes precedence over programmatic settings
+	if envStyle := os.Getenv("GLAMOUR_STYLE"); envStyle != "" {
+		opts = append(opts, glamour.WithStylePath(envStyle))
+		opts = append(opts, glamour.WithWordWrap(width))
+
+		r, err := glamour.NewTermRenderer(opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		return &MarkdownRenderer{
+			renderer: r,
+			width:    width,
+			style:    "env:" + envStyle,
+		}, nil
+	}
 
 	// Apply style option
 	switch style {
@@ -52,12 +71,8 @@ func NewMarkdownRendererWithStyle(width int, style MarkdownStyle) (*MarkdownRend
 	case StyleNotty:
 		opts = append(opts, glamour.WithStylePath("notty"))
 	default:
-		// Check for GLAMOUR_STYLE environment variable
-		if envStyle := os.Getenv("GLAMOUR_STYLE"); envStyle != "" {
-			opts = append(opts, glamour.WithStylePath(envStyle))
-		} else {
-			opts = append(opts, glamour.WithStylePath("dark"))
-		}
+		// Default to auto-detection
+		opts = append(opts, glamour.WithAutoStyle())
 	}
 
 	// Word wrapping
