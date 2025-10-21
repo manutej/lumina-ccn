@@ -19,7 +19,7 @@ type SearchResult struct {
 // FileSearcher performs fast file search
 type FileSearcher struct {
 	rootPath    string
-	allFiles    []string        // Cached file list
+	allFiles    []string // Cached file list
 	results     []SearchResult
 	selected    int
 	searchTerm  string
@@ -86,9 +86,9 @@ func (fs *FileSearcher) Search(term string) []SearchResult {
 		if score > 0 {
 			fileName := filepath.Base(file)
 			fs.results = append(fs.results, SearchResult{
-				Path:    file,
-				Name:    fileName,
-				Score:   score,
+				Path:      file,
+				Name:      fileName,
+				Score:     score,
 				Highlight: highlightMatch(file, term),
 			})
 		}

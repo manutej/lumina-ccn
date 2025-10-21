@@ -15,9 +15,9 @@ type KeyBinding struct {
 
 // KeyBindings represents the complete keybinding configuration
 type KeyBindings struct {
-	Navigation []KeyBinding `json:"navigation"`
-	Scrolling  []KeyBinding `json:"scrolling"`
-	Actions    []KeyBinding `json:"actions"`
+	Navigation  []KeyBinding `json:"navigation"`
+	Scrolling   []KeyBinding `json:"scrolling"`
+	Actions     []KeyBinding `json:"actions"`
 	AppControls []KeyBinding `json:"app_controls"`
 }
 

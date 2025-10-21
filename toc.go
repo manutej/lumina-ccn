@@ -14,8 +14,8 @@ type TOCEntry struct {
 
 // TableOfContents represents the complete TOC structure
 type TableOfContents struct {
-	entries   []TOCEntry
-	selected  int // Currently selected entry (for navigation)
+	entries  []TOCEntry
+	selected int // Currently selected entry (for navigation)
 }
 
 // NewTableOfContents creates a new TOC
@@ -37,7 +37,7 @@ func (toc *TableOfContents) ParseMarkdown(content string) {
 	for lineNum, line := range lines {
 		matches := headingRegex.FindStringSubmatch(line)
 		if matches != nil {
-			level := len(matches[1])        // Number of # symbols
+			level := len(matches[1]) // Number of # symbols
 			title := strings.TrimSpace(matches[2])
 
 			// Skip if title is empty

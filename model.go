@@ -65,13 +65,13 @@ type AppModel struct {
 	showHelp      bool // Toggle for help overlay
 
 	// Content
-	viewerContent    string
-	renderedContent  string
+	viewerContent   string
+	renderedContent string
 
 	// Layout dimensions (percentages)
-	fileTreeWidth  int // 20% of width
-	viewerWidth    int // 60% of width
-	previewWidth   int // 20% of width
+	fileTreeWidth int // 20% of width
+	viewerWidth   int // 60% of width
+	previewWidth  int // 20% of width
 
 	// NEW: Custom keybindings and clipboard
 	keyBindings *KeyBindings

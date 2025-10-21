@@ -280,9 +280,9 @@ func (m AppModel) View() string {
 func main() {
 	// Define command-line flags
 	var (
-		showHelp     bool
-		showVersion  bool
-		showKeys     bool
+		showHelp    bool
+		showVersion bool
+		showKeys    bool
 	)
 
 	flag.BoolVar(&showHelp, "help", false, "Show help message")

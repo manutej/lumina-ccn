@@ -1,5 +1,6 @@
 # Binaries
 ccn
+lumina
 *.exe
 *.exe~
 *.dll
@@ -11,9 +12,13 @@ ccn
 
 # Output of the go coverage tool
 *.out
+coverage.txt
+coverage.out
+coverage.html
 
 # Go workspace file
 go.work
+go.work.sum
 
 # IDE
 .vscode/
@@ -21,11 +26,38 @@ go.work
 *.swp
 *.swo
 *~
+.fleet/
+.nvimrc
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
+*.bak
+*.tmp
 
 # Build artifacts
 dist/
 build/
+bin/
+tmp/
+
+# User configuration (runtime, not version controlled)
+config.local.json
+*.local.json
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Debug files
+debug
+debug.test
+__debug_bin
+
+# GoReleaser
+.goreleaser.yml.bak
+goreleaser.log

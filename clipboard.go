@@ -8,12 +8,12 @@ import (
 
 // SelectionState represents text selection in the viewer
 type SelectionState struct {
-	Enabled      bool   // Whether selection is active
-	StartLine    int    // Line where selection starts
-	StartCol     int    // Column where selection starts
-	EndLine      int    // Line where selection ends
-	EndCol       int    // Column where selection ends
-	IsRectangular bool   // Block selection vs line selection
+	Enabled       bool // Whether selection is active
+	StartLine     int  // Line where selection starts
+	StartCol      int  // Column where selection starts
+	EndLine       int  // Line where selection ends
+	EndCol        int  // Column where selection ends
+	IsRectangular bool // Block selection vs line selection
 }
 
 // ClipboardManager handles copy/paste operations
