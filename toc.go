@@ -80,20 +80,32 @@ func (toc *TableOfContents) View(width int, height int) string {
 	for i := startIdx; i < endIdx; i++ {
 		entry := toc.entries[i]
 
-		// Indent based on level
+		// Indent based on level (2 spaces per level)
 		indent := strings.Repeat("  ", entry.Level-1)
 
 		// Create the display string
 		prefix := "  "
 		if i == toc.selected {
-			prefix = "→ " // Selected indicator
+			prefix = "→ " // Selected indicator (2 chars)
 		}
 
-		// Truncate long titles to fit width
+		// Calculate available space for title
+		// prefix (2) + indent + title should fit in width
+		availableSpace := width - len(prefix) - len(indent) - 1 // -1 for margin
+
 		title := entry.Title
-		maxLen := width - len(indent) - 4
-		if len(title) > maxLen {
-			title = title[:maxLen-1] + "…"
+		// Only truncate if we absolutely must
+		if availableSpace > 4 && len(title) > availableSpace {
+			// Leave room for ellipsis
+			maxLen := availableSpace - 1
+			if maxLen > 0 {
+				title = title[:maxLen] + "…"
+			}
+		} else if availableSpace <= 4 {
+			// Very narrow space - try to show at least some chars
+			if len(title) > availableSpace && availableSpace > 1 {
+				title = title[:availableSpace-1] + "…"
+			}
 		}
 
 		lines = append(lines, prefix+indent+title)

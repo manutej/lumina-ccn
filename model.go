@@ -20,6 +20,16 @@ const (
 	PreviewView
 )
 
+// SelectionMode represents text selection state in viewer
+type SelectionMode int
+
+const (
+	SelectionInactive SelectionMode = iota
+	SelectionCharacter
+	SelectionLine
+	SelectionBlock
+)
+
 // FileItem represents a file or directory in the file tree
 type FileItem struct {
 	path  string
@@ -59,10 +69,17 @@ type AppModel struct {
 	markdownRenderer *utils.MarkdownRenderer
 
 	// State
-	currentView   ViewMode
-	selectedFile  string
-	markdownFiles []string
-	showHelp      bool // Toggle for help overlay
+	currentView    ViewMode
+	selectionMode  SelectionMode // Track selection mode for keyboard-based selection
+	selectedFile   string
+	markdownFiles  []string
+	showHelp       bool // Toggle for help overlay
+	selectionStart int  // Character position where selection starts
+
+	// Mouse drag state
+	mouseDragActive    bool // Whether mouse drag is currently happening
+	mouseDragStartLine int  // Where the drag started (line)
+	mouseDragStartCol  int  // Where the drag started (column)
 
 	// Content
 	viewerContent   string
@@ -74,9 +91,10 @@ type AppModel struct {
 	previewWidth  int // 20% of width
 
 	// NEW: Custom keybindings, clipboard, and color management
-	keyBindings  *KeyBindings
-	clipboard    *ClipboardManager
-	colorManager *ColorManager
+	keyBindings     *KeyBindings
+	clipboard       *ClipboardManager
+	colorManager    *ColorManager
+	tableOfContents *TableOfContents // TOC for current file
 }
 
 // NewAppModel creates a new application model
@@ -99,8 +117,9 @@ func NewAppModel(rootPath string) AppModel {
 	keyBindings := LoadKeyBindings()
 	clipboard := NewClipboardManager()
 	colorManager, _ := NewColorManager()
+	toc := NewTableOfContents()
 
-	return AppModel{
+	m := AppModel{
 		rootPath:         rootPath,
 		currentPath:      rootPath,
 		fileList:         fileList,
@@ -112,7 +131,17 @@ func NewAppModel(rootPath string) AppModel {
 		keyBindings:      &keyBindings,
 		clipboard:        clipboard,
 		colorManager:     colorManager,
+		tableOfContents:  toc,
+		// Set default dimensions for immediate display
+		width:  120,  // Default width
+		height: 40,   // Default height
+		ready:  true, // Mark ready immediately
 	}
+
+	// Apply default dimensions
+	m.updateDimensions()
+
+	return m
 }
 
 // loadDirectory loads files from a directory
@@ -233,7 +262,7 @@ func (m *AppModel) loadFileContent(path string) error {
 	m.viewerContent = string(content)
 	m.selectedFile = path
 
-	// If it's a markdown file, render it with Glamour
+	// If it's a markdown file, render it with Glamour and parse TOC
 	if strings.HasSuffix(path, ".md") && m.markdownRenderer != nil {
 		rendered, err := m.markdownRenderer.Render(m.viewerContent)
 		if err != nil {
@@ -243,10 +272,20 @@ func (m *AppModel) loadFileContent(path string) error {
 			m.renderedContent = rendered
 		}
 		m.viewer.SetContent(m.renderedContent)
+
+		// Parse markdown headers for table of contents
+		if m.tableOfContents != nil {
+			m.tableOfContents.ParseMarkdown(m.viewerContent)
+		}
 	} else {
 		// For non-markdown files, show plain text
 		m.renderedContent = m.viewerContent
 		m.viewer.SetContent(m.viewerContent)
+
+		// Clear TOC for non-markdown files
+		if m.tableOfContents != nil {
+			m.tableOfContents.ParseMarkdown("")
+		}
 	}
 
 	m.viewer.GotoTop()

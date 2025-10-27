@@ -47,6 +47,8 @@ func DefaultKeyBindings() KeyBindings {
 			{Key: "alt+up", Action: "page_up", View: "viewer"},
 			{Key: "alt+right", Action: "view_down", View: "viewer"},
 			{Key: "alt+left", Action: "view_up", View: "viewer"},
+			{Key: "v", Action: "start_selection", View: "viewer"},
+			{Key: "V", Action: "start_line_selection", View: "viewer"},
 		},
 		Actions: []KeyBinding{
 			{Key: "/", Action: "filter", View: "filetree"},

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,6 +29,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ready = true
 		m.updateDimensions()
 		return m, nil
+
+	case tea.MouseMsg:
+		// Handle mouse events
+		return m.handleMouseEvent(msg)
 
 	case tea.KeyMsg:
 		// Handle help overlay toggle
@@ -82,6 +87,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "switch_view":
 			m.currentView = (m.currentView + 1) % 3
 			m.clipboard.ClearSelection() // Clear selection when switching views
+			m.mouseDragActive = false    // Reset drag state when switching views
 
 		// File tree navigation
 		case "down":
@@ -139,11 +145,29 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// NEW: Copy functionality
 		case "copy":
+			debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if debugFile != nil {
+				sl, sc, el, ec := m.clipboard.GetSelectionBounds()
+				fmt.Fprintf(debugFile, "COPY KEY PRESSED: Selection bounds: %d:%d to %d:%d, HasSelection=%v\n",
+					sl, sc, el, ec, m.clipboard.HasSelection())
+				debugFile.Close()
+			}
 			if m.currentView == ViewerView {
 				if err := m.clipboard.CopySelection(m.viewerContent); err == nil {
+					debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+					if debugFile != nil {
+						fmt.Fprintf(debugFile, "  → COPY SUCCESSFUL\n")
+						debugFile.Close()
+					}
 					// Copied! Could show status message
 					// For now, selection clears
 					m.clipboard.ClearSelection()
+				} else {
+					debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+					if debugFile != nil {
+						fmt.Fprintf(debugFile, "  → COPY FAILED: %v\n", err)
+						debugFile.Close()
+					}
 				}
 			}
 
@@ -168,6 +192,193 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+// handleMouseEvent processes mouse events for text selection and scrolling
+func (m AppModel) handleMouseEvent(msg tea.MouseMsg) (AppModel, tea.Cmd) {
+	// DEBUG: Log all mouse events
+	debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if debugFile != nil {
+		viewName := []string{"FileTree", "Viewer", "Preview"}[m.currentView]
+		fmt.Fprintf(debugFile, "MOUSE: Type=%d Button=%d Action=%d X=%d Y=%d | View=%s SelectedFile=%v\n",
+			msg.Type, msg.Button, msg.Action, msg.X, msg.Y, viewName, m.selectedFile != "")
+		debugFile.Close()
+	}
+
+	// Handle mouse wheel scrolling in Viewer pane
+	if msg.Type == 5 && m.currentView == ViewerView {
+		// Scroll up
+		m.viewer.LineUp(3)
+		return m, nil
+	}
+	if msg.Type == 6 && m.currentView == ViewerView {
+		// Scroll down
+		m.viewer.LineDown(3)
+		return m, nil
+	}
+
+	// Handle text selection in Viewer pane
+	if (msg.Type == 1 || msg.Type == 11) && m.currentView == ViewerView && m.selectedFile != "" {
+		debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if debugFile != nil {
+			fmt.Fprintf(debugFile, "  → SELECTION HANDLER REACHED\n")
+			debugFile.Close()
+		}
+
+		// Account for viewer pane's actual position
+		// File tree (m.fileTreeWidth) + left border (1) + file tree border (1)
+		viewerStartX := m.fileTreeWidth + 2
+		viewerStartY := 3 // header height
+
+		// Transform screen coords to pane-relative coords
+		paneRelativeX := msg.X - viewerStartX
+		paneRelativeY := msg.Y - viewerStartY
+
+		// Bounds check - click outside viewer pane
+		if paneRelativeX < 0 || paneRelativeY < 0 {
+			return m, nil
+		}
+
+		// Transform to document coordinates
+		textLine := paneRelativeY + m.viewer.YOffset
+		textCol := paneRelativeX
+
+		// Type 1 = button press events
+		if msg.Type == 1 && msg.Button == 1 {
+			if msg.Action == 0 {
+				// Button press - start selection
+				m.mouseDragActive = true
+				m.mouseDragStartLine = textLine
+				m.mouseDragStartCol = textCol
+				m.selectionMode = SelectionCharacter
+				m.clipboard.StartSelection(textLine, textCol, false)
+				debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				if debugFile != nil {
+					fmt.Fprintf(debugFile, "    → ACTION=0 START at %d:%d\n", textLine, textCol)
+					debugFile.Close()
+				}
+				return m, nil
+			}
+			if msg.Action == 2 {
+				// Drag - extend selection (or start if not already started)
+				if !m.mouseDragActive {
+					// First drag event - start selection
+					m.mouseDragActive = true
+					m.mouseDragStartLine = textLine
+					m.mouseDragStartCol = textCol
+					m.selectionMode = SelectionCharacter
+					m.clipboard.StartSelection(textLine, textCol, false)
+					debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+					if debugFile != nil {
+						fmt.Fprintf(debugFile, "    → ACTION=2 START (first drag) at %d:%d\n", textLine, textCol)
+						debugFile.Close()
+					}
+				}
+				// Extend selection
+				m.clipboard.StartSelection(m.mouseDragStartLine, m.mouseDragStartCol, false)
+				m.clipboard.ExtendSelection(textLine, textCol)
+				debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				if debugFile != nil {
+					fmt.Fprintf(debugFile, "    → ACTION=2 EXTEND to %d:%d\n", textLine, textCol)
+					debugFile.Close()
+				}
+				return m, nil
+			}
+			if msg.Action == 3 {
+				// Release - end selection
+				m.mouseDragActive = false
+				debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				if debugFile != nil {
+					fmt.Fprintf(debugFile, "    → ACTION=3 END\n")
+					debugFile.Close()
+				}
+				return m, nil
+			}
+		}
+
+		// Type 11 = motion events (pure mouse movement, no button info)
+		if msg.Type == 11 && msg.Action == 2 {
+			if !m.mouseDragActive {
+				// First motion - start selection
+				m.mouseDragActive = true
+				m.mouseDragStartLine = textLine
+				m.mouseDragStartCol = textCol
+				m.selectionMode = SelectionCharacter
+				m.clipboard.StartSelection(textLine, textCol, false)
+			} else {
+				// Continue selection
+				m.clipboard.StartSelection(m.mouseDragStartLine, m.mouseDragStartCol, false)
+				m.clipboard.ExtendSelection(textLine, textCol)
+			}
+			return m, nil
+		}
+	}
+
+	// Handle file tree clicks
+	if m.currentView == FileTreeView {
+		var cmd tea.Cmd
+		m.fileList, cmd = m.fileList.Update(msg)
+		return m, cmd
+	}
+
+	return m, nil
+}
+
+// highlightSelection applies visual highlighting to selected text
+func (m AppModel) highlightSelection(content string) string {
+	sl, sc, el, ec := m.clipboard.GetSelectionBounds()
+
+	// Normalize selection bounds (handle backwards selection)
+	if sl > el || (sl == el && sc > ec) {
+		sl, sc, el, ec = el, ec, sl, sc
+	}
+
+	// Split content into lines
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 {
+		return content
+	}
+
+	// Highlight selected lines
+	highlightStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("11")). // Bright yellow background
+		Foreground(lipgloss.Color("0"))   // Black text
+
+	for i := range lines {
+		// Use ABSOLUTE line numbers from the full document
+		if i >= sl && i <= el {
+			line := lines[i]
+
+			if i == sl && i == el {
+				// Single line selection
+				if sc >= 0 && ec <= len(line) && sc <= ec {
+					before := line[:sc]
+					selected := line[sc:ec]
+					after := line[ec:]
+					lines[i] = before + highlightStyle.Render(selected) + after
+				}
+			} else if i == sl {
+				// First line of multi-line selection
+				if sc >= 0 && sc <= len(line) {
+					before := line[:sc]
+					selected := line[sc:]
+					lines[i] = before + highlightStyle.Render(selected)
+				}
+			} else if i == el {
+				// Last line of multi-line selection
+				if ec >= 0 && ec <= len(line) {
+					selected := line[:ec]
+					after := line[ec:]
+					lines[i] = highlightStyle.Render(selected) + after
+				}
+			} else {
+				// Middle lines - highlight entire line
+				lines[i] = highlightStyle.Render(line)
+			}
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // View renders the UI
@@ -209,13 +420,20 @@ func (m AppModel) View() string {
 	if m.currentView == ViewerView {
 		viewerStyle = activePaneStyle
 	}
-	viewerContent := m.viewer.View()
+	viewerContent := m.renderedContent
 	if m.selectedFile == "" {
 		viewerContent = "No file selected\n\nNavigate in the file tree and press Enter to view a file."
+	} else if m.clipboard.HasSelection() {
+		// Apply selection highlighting to FULL document content
+		viewerContent = m.highlightSelection(viewerContent)
 	}
+
+	// Update viewer with highlighted content
+	m.viewer.SetContent(viewerContent)
+
 	viewerPane := viewerStyle.
 		Width(m.viewerWidth).
-		Render(viewerContent)
+		Render(m.viewer.View())
 
 	// Preview pane
 	previewStyle := paneStyle
