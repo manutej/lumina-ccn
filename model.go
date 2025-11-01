@@ -20,6 +20,15 @@ const (
 	PreviewView
 )
 
+// UIMode represents the current UI interaction mode
+type UIMode int
+
+const (
+	NormalMode UIMode = iota
+	FinderMode
+	SearchMode
+)
+
 // SelectionMode represents text selection state in viewer
 type SelectionMode int
 
@@ -95,6 +104,13 @@ type AppModel struct {
 	clipboard       *ClipboardManager
 	colorManager    *ColorManager
 	tableOfContents *TableOfContents // TOC for current file
+
+	// Phase 3: Fuzzy Finder Integration
+	currentMode    UIMode
+	finderActive   bool
+	finderInput    string
+	finderSelected int
+	fuzzyFinder    *FuzzyFinderImpl
 }
 
 // NewAppModel creates a new application model
@@ -119,6 +135,9 @@ func NewAppModel(rootPath string) AppModel {
 	colorManager, _ := NewColorManager()
 	toc := NewTableOfContents()
 
+	// Initialize fuzzy finder with empty list (will be populated when activated)
+	fuzzyFinder := NewFuzzyFinderImpl([]string{})
+
 	m := AppModel{
 		rootPath:         rootPath,
 		currentPath:      rootPath,
@@ -132,6 +151,12 @@ func NewAppModel(rootPath string) AppModel {
 		clipboard:        clipboard,
 		colorManager:     colorManager,
 		tableOfContents:  toc,
+		// Phase 3: Fuzzy Finder
+		currentMode:    NormalMode,
+		finderActive:   false,
+		finderInput:    "",
+		finderSelected: 0,
+		fuzzyFinder:    fuzzyFinder,
 		// Set default dimensions for immediate display
 		width:  120,  // Default width
 		height: 40,   // Default height

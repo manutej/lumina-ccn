@@ -12,6 +12,24 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Phase 3 Message Types for Fuzzy Finder
+
+// FinderActivatedMsg indicates the fuzzy finder modal should be shown
+type FinderActivatedMsg struct{}
+
+// FinderInputMsg updates the finder input and triggers filtering
+type FinderInputMsg struct {
+	input string
+}
+
+// FinderSelectionMsg indicates a file was selected from the finder
+type FinderSelectionMsg struct {
+	filePath string
+}
+
+// FinderCanceledMsg closes the finder modal without selection
+type FinderCanceledMsg struct{}
+
 // Init initializes the model
 func (m AppModel) Init() tea.Cmd {
 	return nil
@@ -51,6 +69,72 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.String() == "q" || msg.String() == "ctrl+c" {
 				return m, tea.Quit
 			}
+			return m, nil
+		}
+
+		// Phase 3: Handle fuzzy finder modal input
+		if m.finderActive {
+			switch msg.String() {
+			case "esc":
+				// Cancel finder
+				m.finderActive = false
+				m.finderInput = ""
+				m.currentMode = NormalMode
+				return m, nil
+
+			case "enter":
+				// Select item and load file
+				selected := m.fuzzyFinder.SelectedItem()
+				if selected != "" {
+					m.finderActive = false
+					m.finderInput = ""
+					m.currentMode = NormalMode
+					// Load the selected file
+					if err := m.loadFileContent(selected); err == nil {
+						// Successfully loaded file
+					}
+				}
+				return m, nil
+
+			case "up", "ctrl+p":
+				// Navigate up in results
+				m.fuzzyFinder.HandleKey("up")
+				return m, nil
+
+			case "down", "ctrl+n":
+				// Navigate down in results
+				m.fuzzyFinder.HandleKey("down")
+				return m, nil
+
+			case "backspace":
+				// Delete character from input
+				if len(m.finderInput) > 0 {
+					m.finderInput = m.finderInput[:len(m.finderInput)-1]
+					m.fuzzyFinder.SetFilter(m.finderInput)
+				}
+				return m, nil
+
+			default:
+				// Add character to input if it's a single printable character
+				if len(msg.String()) == 1 {
+					m.finderInput += msg.String()
+					m.fuzzyFinder.SetFilter(m.finderInput)
+				}
+				return m, nil
+			}
+		}
+
+		// Phase 3: Activate finder with "/" key
+		if msg.String() == "/" && !m.finderActive {
+			// Collect all markdown files
+			if len(m.markdownFiles) == 0 {
+				m.markdownFiles = findMarkdownFiles(m.rootPath)
+			}
+			// Initialize fuzzy finder with file list
+			m.fuzzyFinder = NewFuzzyFinderImpl(m.markdownFiles)
+			m.finderActive = true
+			m.finderInput = ""
+			m.currentMode = FinderMode
 			return m, nil
 		}
 
@@ -353,6 +437,72 @@ func (m AppModel) highlightSelection(content string) string {
 	return strings.Join(lines, "\n")
 }
 
+// renderFinderModal renders the fuzzy finder modal overlay
+func (m AppModel) renderFinderModal() string {
+	// Modal dimensions
+	modalWidth := min(80, m.width-10)
+	modalHeight := min(20, m.height-10)
+
+	// Modal styles
+	modalStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(m.colorManager.GetColor("active-border"))).
+		Padding(1, 2).
+		Width(modalWidth).
+		Height(modalHeight)
+
+	inputStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(m.colorManager.GetColor("title"))).
+		Bold(true)
+
+	itemStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("7")) // Light gray
+
+	selectedItemStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("0")).  // Black
+		Background(lipgloss.Color("11")). // Bright yellow
+		Bold(true)
+
+	// Build content
+	var content strings.Builder
+
+	// Input line
+	content.WriteString(inputStyle.Render("🔍 Find: " + m.finderInput + "█"))
+	content.WriteString("\n\n")
+
+	// Results
+	results := m.fuzzyFinder.FilteredResults()
+	if len(results) == 0 {
+		content.WriteString(itemStyle.Render("No matches found"))
+	} else {
+		// Show up to 15 results
+		maxResults := min(15, len(results))
+		cursor := m.fuzzyFinder.Cursor()
+
+		for i := 0; i < maxResults; i++ {
+			if i == cursor {
+				content.WriteString(selectedItemStyle.Render("▶ " + results[i]))
+			} else {
+				content.WriteString(itemStyle.Render("  " + results[i]))
+			}
+			if i < maxResults-1 {
+				content.WriteString("\n")
+			}
+		}
+
+		// Show count if more results exist
+		if len(results) > maxResults {
+			content.WriteString("\n")
+			content.WriteString(itemStyle.Render(fmt.Sprintf("  ... and %d more", len(results)-maxResults)))
+		}
+	}
+
+	content.WriteString("\n\n")
+	content.WriteString(itemStyle.Render("↑/↓: navigate | Enter: select | Esc: cancel"))
+
+	return modalStyle.Render(content.String())
+}
+
 // View renders the UI
 func (m AppModel) View() string {
 	if !m.ready {
@@ -446,11 +596,11 @@ func (m AppModel) View() string {
 
 	switch m.currentView {
 	case FileTreeView:
-		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: nav | Enter: open | h/Esc: back | /: filter | ?: help | q: quit", viewName)
+		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: nav | Enter: open | h/Esc: back | /: fuzzy find | ?: help | q: quit", viewName)
 	case ViewerView:
-		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | y: copy | ?: help | q: quit", viewName)
+		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | /: fuzzy find | y: copy | ?: help | q: quit", viewName)
 	case PreviewView:
-		statusText = fmt.Sprintf("[%s] Tab: switch | Coming soon | ?: help | q: quit", viewName)
+		statusText = fmt.Sprintf("[%s] Tab: switch | /: fuzzy find | ?: help | q: quit", viewName)
 	}
 
 	status := statusStyle.Render(statusText)
@@ -473,6 +623,21 @@ func (m AppModel) View() string {
 			lipgloss.Center,
 			helpOverlay,
 			lipgloss.WithWhitespaceChars(" "),
+		)
+	}
+
+	// Phase 3: If finder modal is active, render it on top
+	if m.finderActive {
+		finderOverlay := m.renderFinderModal()
+
+		return lipgloss.Place(
+			m.width,
+			m.height,
+			lipgloss.Center,
+			lipgloss.Center,
+			finderOverlay,
+			lipgloss.WithWhitespaceChars(" "),
+			lipgloss.WithWhitespaceForeground(lipgloss.Color("0")),
 		)
 	}
 
