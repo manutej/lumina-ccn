@@ -59,24 +59,30 @@ func (cm *ClipboardManager) GetSelection(content string) string {
 }
 
 // CopySelection copies text to system clipboard
-// If a selection is active, copy the selected text
-// Otherwise, copy the entire content
+// If a selection is active and non-empty, copy the selected text
+// If selection is empty, fall back to copying entire content
+// If no selection, copy entire content
 func (cm *ClipboardManager) CopySelection(content string) error {
 	var textToCopy string
 
-	// If selection is enabled, use selected text
+	// If selection is enabled, try to use selected text
 	if cm.selection.Enabled {
 		selected := cm.GetSelection(content)
 		if selected == "" {
-			return fmt.Errorf("selection is empty")
+			// Empty selection - fall back to copying entire content
+			// This handles the case where user clicked without dragging
+			textToCopy = content
+		} else {
+			textToCopy = selected
 		}
-		textToCopy = selected
 	} else {
 		// No selection - copy entire content
-		if content == "" {
-			return fmt.Errorf("no content to copy")
-		}
 		textToCopy = content
+	}
+
+	// Validate we have something to copy
+	if textToCopy == "" {
+		return fmt.Errorf("no content to copy")
 	}
 
 	cm.lastCopy = textToCopy

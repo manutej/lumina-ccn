@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -30,6 +31,9 @@ type FinderSelectionMsg struct {
 // FinderCanceledMsg closes the finder modal without selection
 type FinderCanceledMsg struct{}
 
+// ClearStatusMsg clears the status message after a timeout
+type ClearStatusMsg struct{}
+
 // Init initializes the model
 func (m AppModel) Init() tea.Cmd {
 	return nil
@@ -41,6 +45,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case ClearStatusMsg:
+		// Clear the status message
+		m.statusMessage = ""
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -243,15 +252,30 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						fmt.Fprintf(debugFile, "  → COPY SUCCESSFUL\n")
 						debugFile.Close()
 					}
-					// Copied! Could show status message
-					// For now, selection clears
+					// Show success message
+					if m.clipboard.HasSelection() {
+						m.statusMessage = "✓ Copied selection to clipboard!"
+					} else {
+						m.statusMessage = "✓ Copied document to clipboard!"
+					}
+					// Clear selection after successful copy
 					m.clipboard.ClearSelection()
+					// Schedule message clear after 2 seconds
+					return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+						return ClearStatusMsg{}
+					})
 				} else {
 					debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 					if debugFile != nil {
 						fmt.Fprintf(debugFile, "  → COPY FAILED: %v\n", err)
 						debugFile.Close()
 					}
+					// Show error message
+					m.statusMessage = "✗ Copy failed: " + err.Error()
+					// Schedule message clear after 3 seconds (longer for errors)
+					return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+						return ClearStatusMsg{}
+					})
 				}
 			}
 
@@ -594,13 +618,19 @@ func (m AppModel) View() string {
 	viewName := []string{"FILE TREE", "VIEWER", "PREVIEW"}[m.currentView]
 	var statusText string
 
-	switch m.currentView {
-	case FileTreeView:
-		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: nav | Enter: open | h/Esc: back | /: fuzzy find | ?: help | q: quit", viewName)
-	case ViewerView:
-		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | /: fuzzy find | y: copy | ?: help | q: quit", viewName)
-	case PreviewView:
-		statusText = fmt.Sprintf("[%s] Tab: switch | /: fuzzy find | ?: help | q: quit", viewName)
+	// If there's a status message, show it prominently
+	if m.statusMessage != "" {
+		statusText = m.statusMessage
+	} else {
+		// Otherwise show context-sensitive hints
+		switch m.currentView {
+		case FileTreeView:
+			statusText = fmt.Sprintf("[%s] Tab: switch | j/k: nav | Enter: open | h/Esc: back | /: fuzzy find | ?: help | q: quit", viewName)
+		case ViewerView:
+			statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | /: fuzzy find | y: copy | ?: help | q: quit", viewName)
+		case PreviewView:
+			statusText = fmt.Sprintf("[%s] Tab: switch | /: fuzzy find | ?: help | q: quit", viewName)
+		}
 	}
 
 	status := statusStyle.Render(statusText)

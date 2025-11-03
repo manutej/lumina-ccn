@@ -104,6 +104,7 @@ type AppModel struct {
 	clipboard       *ClipboardManager
 	colorManager    *ColorManager
 	tableOfContents *TableOfContents // TOC for current file
+	statusMessage   string           // Status message to show in UI (e.g., "Copied!")
 
 	// Phase 3: Fuzzy Finder Integration
 	currentMode    UIMode
