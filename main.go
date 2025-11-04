@@ -161,6 +161,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.navigateUp()
 				}
+			} else if m.currentView == ViewerView && m.selectionMode != SelectionInactive {
+				// Cancel selection in viewer mode
+				m.selectionMode = SelectionInactive
+				m.clipboard.ClearSelection()
 			}
 
 		case "open":
@@ -190,11 +194,21 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "scroll_down":
 			if m.currentView == ViewerView {
 				m.viewer.LineDown(1)
+				// Extend selection if in selection mode
+				if m.selectionMode != SelectionInactive {
+					currentLine := m.viewer.YOffset + m.viewer.Height - 1
+					m.clipboard.ExtendSelection(currentLine, 0)
+				}
 			}
 
 		case "scroll_up":
 			if m.currentView == ViewerView {
 				m.viewer.LineUp(1)
+				// Extend selection if in selection mode
+				if m.selectionMode != SelectionInactive {
+					currentLine := m.viewer.YOffset
+					m.clipboard.ExtendSelection(currentLine, 0)
+				}
 			}
 
 		case "page_down":
@@ -227,6 +241,23 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.viewer.GotoBottom()
 			}
 
+		// Visual selection mode (vim-style)
+		case "start_selection":
+			if m.currentView == ViewerView {
+				m.selectionMode = SelectionCharacter
+				// Start selection at current viewer position (top of visible area)
+				currentLine := m.viewer.YOffset
+				m.clipboard.StartSelection(currentLine, 0, false)
+			}
+
+		case "start_line_selection":
+			if m.currentView == ViewerView {
+				m.selectionMode = SelectionLine
+				// Start line selection at current viewer position
+				currentLine := m.viewer.YOffset
+				m.clipboard.StartSelection(currentLine, 0, false)
+			}
+
 		// NEW: Copy functionality
 		case "copy":
 			debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -246,6 +277,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Copied! Could show status message
 					// For now, selection clears
 					m.clipboard.ClearSelection()
+					m.selectionMode = SelectionInactive
 				} else {
 					debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 					if debugFile != nil {

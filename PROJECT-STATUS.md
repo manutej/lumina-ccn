@@ -247,6 +247,51 @@ General:
 
 ---
 
+## 🐛 Known Issues & Fixes (November 3, 2025)
+
+### Text Selection & Copy Issues
+
+Three related issues were identified and addressed:
+
+#### [CET-272](https://linear.app/ceti-luxor/issue/CET-272) - Visual Selection Mode (v key) Not Implemented ✅ FIXED
+- **Problem**: `v` and `V` keybindings defined but handlers missing
+- **Impact**: Users couldn't select text with keyboard (vim workflow broken)
+- **Fix**: Implemented `start_selection` and `start_line_selection` handlers
+- **Usage**:
+  - Press `v` in viewer to start character selection
+  - Press `V` for line selection
+  - Use `j/k` to extend selection
+  - Press `y` to copy
+  - Press `Esc` to cancel
+
+#### [CET-273](https://linear.app/ceti-luxor/issue/CET-273) - Copy Includes ANSI Codes ✅ VERIFIED CLEAN
+- **Problem**: User reported ANSI codes in copied text
+- **Root Cause**: User was using **terminal mouse selection** (Cmd+C), not Lumina's `y` key
+- **Verification**: Code inspection confirms `m.viewerContent` contains clean source text
+- **Solution**: Use Lumina's built-in copy (`y` key) instead of terminal selection
+- **Note**: Terminal mouse selection captures rendered output with ANSI codes (unavoidable terminal limitation)
+
+#### [CET-274](https://linear.app/ceti-luxor/issue/CET-274) - ANSI Stripper Utility
+- **Status**: Planned (Medium priority)
+- **Purpose**: Fallback utility to strip ANSI codes if needed
+- **Use Case**: Future export/save functionality
+
+### How to Copy Text Properly
+
+✅ **Correct Method** (Clean Text):
+1. Navigate to viewer pane (`Tab`)
+2. Press `v` to start selection
+3. Use `j/k` to select lines
+4. Press `y` to copy
+5. Paste anywhere with `Cmd+V`
+
+❌ **Terminal Mouse Selection** (Has ANSI Codes):
+- Selecting with mouse in terminal captures formatting codes
+- This is a limitation of how terminals work
+- Use keyboard selection instead
+
+---
+
 ## 🔄 Phase 3: UI Component Integration (PLANNING)
 
 **Status**: Planning complete, ready to begin Week 1
