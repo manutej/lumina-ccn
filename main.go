@@ -248,6 +248,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Start selection at current viewer position (top of visible area)
 				currentLine := m.viewer.YOffset
 				m.clipboard.StartSelection(currentLine, 0, false)
+				// Extend by one character to match vim v behavior
+				m.clipboard.ExtendSelection(currentLine, 1)
 			}
 
 		case "start_line_selection":
@@ -256,6 +258,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Start line selection at current viewer position
 				currentLine := m.viewer.YOffset
 				m.clipboard.StartSelection(currentLine, 0, false)
+				// Immediately extend to end of line (vim V behavior)
+				m.clipboard.ExtendSelection(currentLine, 9999)
 			}
 
 		// NEW: Copy functionality

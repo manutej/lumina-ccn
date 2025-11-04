@@ -256,7 +256,11 @@ Three related issues were identified and addressed:
 #### [CET-272](https://linear.app/ceti-luxor/issue/CET-272) - Visual Selection Mode (v key) Not Implemented ✅ FIXED
 - **Problem**: `v` and `V` keybindings defined but handlers missing
 - **Impact**: Users couldn't select text with keyboard (vim workflow broken)
-- **Fix**: Implemented `start_selection` and `start_line_selection` handlers
+- **Fix**: Implemented `start_selection` and `start_line_selection` handlers with immediate selection
+- **Behavior** (matching vim):
+  - `v` (character mode): Immediately selects first character of current line
+  - `V` (line mode): Immediately selects entire current line
+  - Both modes allow `y` to copy without requiring movement first
 - **Usage**:
   - Press `v` in viewer to start character selection
   - Press `V` for line selection
