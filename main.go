@@ -126,6 +126,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Phase 3: Activate finder with "/" key
 		if msg.String() == "/" && !m.finderActive {
+			debugFile, _ := os.OpenFile("/tmp/lumina_key_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if debugFile != nil {
+				fmt.Fprintf(debugFile, "FUZZY FINDER ACTIVATED: finderActive=%v, markdownFiles=%d\n", m.finderActive, len(m.markdownFiles))
+				debugFile.Close()
+			}
 			// Collect all markdown files
 			if len(m.markdownFiles) == 0 {
 				m.markdownFiles = findMarkdownFiles(m.rootPath)
@@ -145,6 +150,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If no view-specific action, try "any" view
 		if action == "" {
 			action = m.keyBindings.FindAction(msg.String(), "any")
+		}
+
+		// DEBUG: Log key presses and actions
+		debugFile, _ := os.OpenFile("/tmp/lumina_key_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if debugFile != nil {
+			fmt.Fprintf(debugFile, "KEY: %q, VIEW: %s, ACTION: %q\n", msg.String(), viewName, action)
+			debugFile.Close()
 		}
 
 		// Execute action
@@ -634,7 +646,7 @@ func (m AppModel) View() string {
 	case FileTreeView:
 		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: nav | Enter: open | h/Esc: back | /: fuzzy find | ?: help | q: quit", viewName)
 	case ViewerView:
-		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | /: fuzzy find | y: copy | ?: help | q: quit", viewName)
+		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | v/V: select | y: copy | /: fuzzy | ?: help | q: quit", viewName)
 	case PreviewView:
 		statusText = fmt.Sprintf("[%s] Tab: switch | /: fuzzy find | ?: help | q: quit", viewName)
 	}
