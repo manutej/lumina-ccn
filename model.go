@@ -29,6 +29,7 @@ const (
 	SearchMode
 	HelpMode
 	LoadingMode
+	TOCMode
 )
 
 // SelectionMode represents text selection state in viewer
@@ -400,6 +401,11 @@ func (m *AppModel) transitionTo(newMode UIMode) {
 		// No cleanup needed
 	case LoadingMode:
 		m.loadingMessage = ""
+	case TOCMode:
+		// Reset TOC selection to top
+		if m.tableOfContents != nil {
+			m.tableOfContents.SelectFirst()
+		}
 	}
 
 	m.currentMode = newMode

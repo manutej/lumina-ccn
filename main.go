@@ -136,6 +136,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSearchMode(msg)
 		case LoadingMode:
 			return m.handleLoadingMode(msg)
+		case TOCMode:
+			return m.handleTOCMode(msg)
 		case NormalMode:
 			return m.handleNormalMode(msg)
 		}
@@ -260,6 +262,50 @@ func (m AppModel) handleLoadingMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m AppModel) handleTOCMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.tableOfContents == nil {
+		m.transitionTo(NormalMode)
+		return m, nil
+	}
+
+	switch msg.String() {
+	case "esc", "q", "t":
+		// Close TOC modal
+		m.transitionTo(NormalMode)
+		return m, nil
+
+	case "enter":
+		// Jump to selected heading
+		if m.tableOfContents.HasEntries() {
+			lineNum := m.tableOfContents.GetSelectedLineNum()
+			m.gotoLine(lineNum)
+			m.transitionTo(NormalMode)
+		}
+		return m, nil
+
+	case "up", "k":
+		m.tableOfContents.SelectPrevious()
+		return m, nil
+
+	case "down", "j":
+		m.tableOfContents.SelectNext()
+		return m, nil
+
+	case "g":
+		m.tableOfContents.SelectFirst()
+		return m, nil
+
+	case "G":
+		m.tableOfContents.SelectLast()
+		return m, nil
+
+	case "ctrl+c":
+		return m, tea.Quit
+	}
+
+	return m, nil
+}
+
 func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -287,6 +333,13 @@ func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+f":
 		// Activate search
 		m.transitionTo(SearchMode)
+		return m, nil
+
+	case "t":
+		// Activate TOC (Table of Contents)
+		if m.selectedFile != "" && m.tableOfContents != nil && m.tableOfContents.HasEntries() {
+			m.transitionTo(TOCMode)
+		}
 		return m, nil
 	}
 
@@ -517,6 +570,25 @@ func (m *AppModel) startMouseSelection(line, col int) tea.Cmd {
 	return dragTimeoutCmd() // Blocker 3 Fix: Auto-recover after 5 seconds
 }
 
+// gotoLine scrolls the viewer to a specific line number
+func (m *AppModel) gotoLine(lineNum int) {
+	if lineNum < 0 {
+		lineNum = 0
+	}
+
+	// Set the viewport's Y offset to the target line
+	m.viewer.YOffset = lineNum
+
+	// Ensure we don't scroll past the end
+	maxOffset := len(strings.Split(m.viewer.View(), "\n")) - m.viewer.Height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.viewer.YOffset > maxOffset {
+		m.viewer.YOffset = maxOffset
+	}
+}
+
 // screenToDocCoords transforms screen coordinates to document coordinates
 func (m *AppModel) screenToDocCoords(screenX, screenY int) (line, col int) {
 	// Account for viewer pane's actual position
@@ -592,19 +664,42 @@ func (m AppModel) highlightSelection(content string) string {
 	return strings.Join(lines, "\n")
 }
 
-// renderLoadingModal renders a loading indicator
-func (m AppModel) renderLoadingModal() string {
-	modalStyle := lipgloss.NewStyle().
+// Modal Rendering Helpers (DRY Principle)
+
+// createModalStyles returns common modal styles
+func (m AppModel) createModalStyles() (modalBase, title, item, selectedItem lipgloss.Style) {
+	modalBase = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(m.colorManager.GetColor("active-border"))).
-		Padding(2, 4)
+		Padding(1, 2)
 
-	textStyle := lipgloss.NewStyle().
+	title = lipgloss.NewStyle().
 		Foreground(lipgloss.Color(m.colorManager.GetColor("title"))).
 		Bold(true)
 
-	content := textStyle.Render(m.loadingMessage + "...")
+	item = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("7"))
+
+	selectedItem = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("0")).
+		Background(lipgloss.Color("11")).
+		Bold(true)
+
+	return
+}
+
+// renderModal renders a centered modal with given content
+func (m AppModel) renderModal(content string, width, height int) string {
+	modalBase, _, _, _ := m.createModalStyles()
+	modalStyle := modalBase.Width(width).Height(height)
 	return modalStyle.Render(content)
+}
+
+// renderLoadingModal renders a loading indicator
+func (m AppModel) renderLoadingModal() string {
+	_, titleStyle, _, _ := m.createModalStyles()
+	content := titleStyle.Render(m.loadingMessage + "...")
+	return m.renderModal(content, 30, 5)
 }
 
 // renderSearchModal renders the ripgrep search UI (Phase 3 Week 2)
@@ -612,24 +707,7 @@ func (m AppModel) renderSearchModal() string {
 	modalWidth := min(m.width-10, 100)
 	modalHeight := min(m.height-10, 30)
 
-	modalStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(m.colorManager.GetColor("active-border"))).
-		Padding(1, 2).
-		Width(modalWidth).
-		Height(modalHeight)
-
-	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(m.colorManager.GetColor("title"))).
-		Bold(true)
-
-	itemStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("7"))
-
-	selectedItemStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("0")).
-		Background(lipgloss.Color("11")).
-		Bold(true)
+	_, titleStyle, itemStyle, selectedItemStyle := m.createModalStyles()
 
 	var content strings.Builder
 
@@ -668,7 +746,74 @@ func (m AppModel) renderSearchModal() string {
 	content.WriteString("\n\n")
 	content.WriteString(itemStyle.Render("↑/↓: navigate | Enter: jump | n/N: next/prev | Esc: cancel"))
 
-	return modalStyle.Render(content.String())
+	return m.renderModal(content.String(), modalWidth, modalHeight)
+}
+
+// renderTOCModal renders the Table of Contents modal
+func (m AppModel) renderTOCModal() string {
+	if m.tableOfContents == nil || !m.tableOfContents.HasEntries() {
+		return ""
+	}
+
+	// Modal dimensions
+	modalWidth := min(60, m.width-10)
+	modalHeight := min(m.height-10, m.tableOfContents.GetEntryCount()+6)
+
+	// Get common styles
+	_, titleStyle, itemStyle, selectedItemStyle := m.createModalStyles()
+
+	// Build content
+	var content strings.Builder
+
+	// Title
+	content.WriteString(titleStyle.Render("📋 Table of Contents"))
+	content.WriteString("\n\n")
+
+	// TOC entries
+	selectedIdx := m.tableOfContents.GetSelectedIndex()
+	maxDisplay := modalHeight - 6 // Leave room for title and footer
+
+	// Calculate scroll window
+	startIdx := 0
+	if selectedIdx >= maxDisplay {
+		startIdx = selectedIdx - maxDisplay + 1
+	}
+	endIdx := startIdx + maxDisplay
+	if endIdx > m.tableOfContents.GetEntryCount() {
+		endIdx = m.tableOfContents.GetEntryCount()
+	}
+
+	// Render visible entries
+	for i := startIdx; i < endIdx; i++ {
+		entry := m.tableOfContents.entries[i]
+
+		// Indent based on heading level
+		indent := strings.Repeat("  ", entry.Level-1)
+
+		// Truncate title if needed
+		availableWidth := modalWidth - len(indent) - 6 // 6 for borders and arrow
+		title := entry.Title
+		if len(title) > availableWidth {
+			title = title[:availableWidth-1] + "…"
+		}
+
+		line := indent + title
+
+		if i == selectedIdx {
+			content.WriteString(selectedItemStyle.Render("▶ " + line))
+		} else {
+			content.WriteString(itemStyle.Render("  " + line))
+		}
+		if i < endIdx-1 {
+			content.WriteString("\n")
+		}
+	}
+
+	// Navigation hint
+	content.WriteString("\n\n")
+	content.WriteString(itemStyle.Render("j/k: navigate | Enter: jump | t/Esc: close"))
+
+	return m.renderModal(content.String(), modalWidth, modalHeight)
 }
 
 // renderFinderModal renders the fuzzy finder modal overlay using flat state (Blocker 2 Fix)
@@ -677,25 +822,8 @@ func (m AppModel) renderFinderModal() string {
 	modalWidth := min(80, m.width-10)
 	modalHeight := min(20, m.height-10)
 
-	// Modal styles
-	modalStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(m.colorManager.GetColor("active-border"))).
-		Padding(1, 2).
-		Width(modalWidth).
-		Height(modalHeight)
-
-	inputStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(m.colorManager.GetColor("title"))).
-		Bold(true)
-
-	itemStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("7")) // Light gray
-
-	selectedItemStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("0")).  // Black
-		Background(lipgloss.Color("11")). // Bright yellow
-		Bold(true)
+	// Get common styles
+	_, inputStyle, itemStyle, selectedItemStyle := m.createModalStyles()
 
 	// Build content
 	var content strings.Builder
@@ -734,7 +862,7 @@ func (m AppModel) renderFinderModal() string {
 	content.WriteString("\n\n")
 	content.WriteString(itemStyle.Render("↑/↓: navigate | Enter: select | Esc: cancel"))
 
-	return modalStyle.Render(content.String())
+	return m.renderModal(content.String(), modalWidth, modalHeight)
 }
 
 // View renders the UI
@@ -776,23 +904,14 @@ func (m AppModel) View() string {
 	if m.currentView == ViewerView {
 		viewerStyle = activePaneStyle
 	}
-	// Determine viewer content with proper rendering order
+	// Determine viewer content - use cached rendered version
+	// Selection highlighting is handled by clipboard/highlighting system separately
 	var viewerContent string
 	if m.selectedFile == "" {
 		viewerContent = "No file selected\n\nNavigate in the file tree and press Enter to view a file."
-	} else if m.clipboard.HasSelection() {
-		// CRITICAL: Apply highlighting to ORIGINAL content BEFORE rendering
-		// This ensures selection highlighting targets correct coordinates
-		highlighted := m.highlightSelection(m.viewerContent)
-		// THEN render with glamour (adds ANSI codes after highlighting)
-		rendered, err := m.markdownRenderer.Render(highlighted)
-		if err != nil {
-			viewerContent = highlighted // Fallback to highlighted plain text
-		} else {
-			viewerContent = rendered
-		}
 	} else {
-		// No selection, use cached rendered version (performance optimization)
+		// Always use the cached rendered version for consistency
+		// Selection highlighting should be done on the rendered content, not the raw markdown
 		viewerContent = m.renderedContent
 	}
 
@@ -832,7 +951,11 @@ func (m AppModel) View() string {
 	case FileTreeView:
 		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: nav | Enter: open | h/Esc: back | /: fuzzy find | ?: help | q: quit", viewName)
 	case ViewerView:
-		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | /: fuzzy find | y: copy | ?: help | q: quit", viewName)
+		tocHint := ""
+		if m.tableOfContents != nil && m.tableOfContents.HasEntries() {
+			tocHint = " | t: TOC"
+		}
+		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | /: find%s | y: copy | ?: help | q: quit", viewName, tocHint)
 	case PreviewView:
 		statusText = fmt.Sprintf("[%s] Tab: switch | /: fuzzy find | ?: help | q: quit", viewName)
 	}
@@ -880,6 +1003,18 @@ func (m AppModel) View() string {
 			lipgloss.Center,
 			lipgloss.Center,
 			searchOverlay,
+			lipgloss.WithWhitespaceChars(" "),
+		)
+
+	case TOCMode:
+		// Table of Contents overlay
+		tocOverlay := m.renderTOCModal()
+		return lipgloss.Place(
+			m.width,
+			m.height,
+			lipgloss.Center,
+			lipgloss.Center,
+			tocOverlay,
 			lipgloss.WithWhitespaceChars(" "),
 		)
 
