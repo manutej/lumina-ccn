@@ -150,11 +150,22 @@ func extractSelection(lines []string, sel SelectionState) string {
 			return ""
 		}
 		line := lines[startLine]
+		// Clamp both start and end to line bounds
+		if startCol < 0 {
+			startCol = 0
+		}
+		if startCol > len(line) {
+			startCol = len(line)
+		}
+		if endCol < 0 {
+			endCol = 0
+		}
 		if endCol > len(line) {
 			endCol = len(line)
 		}
-		if startCol < 0 {
-			startCol = 0
+		// Check for empty selection after clamping
+		if startCol >= endCol {
+			return ""
 		}
 		return line[startCol:endCol]
 	}
