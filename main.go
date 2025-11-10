@@ -552,31 +552,13 @@ func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.viewer.GotoBottom()
 			}
 
-		// NEW: Copy functionality
+		// Copy all file content
 		case "copy":
-			debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if debugFile != nil {
-				sl, sc, el, ec := m.clipboard.GetSelectionBounds()
-				fmt.Fprintf(debugFile, "COPY KEY PRESSED: Selection bounds: %d:%d to %d:%d, HasSelection=%v\n",
-					sl, sc, el, ec, m.clipboard.HasSelection())
-				debugFile.Close()
-			}
-			if m.currentView == ViewerView {
-				if err := m.clipboard.CopySelection(m.viewerContent); err == nil {
-					debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-					if debugFile != nil {
-						fmt.Fprintf(debugFile, "  → COPY SUCCESSFUL\n")
-						debugFile.Close()
-					}
-					// Copied! Could show status message
-					// For now, selection clears
-					m.clipboard.ClearSelection()
-				} else {
-					debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-					if debugFile != nil {
-						fmt.Fprintf(debugFile, "  → COPY FAILED: %v\n", err)
-						debugFile.Close()
-					}
+			if m.currentView == ViewerView && m.viewerContent != "" {
+				// Copy entire file content to clipboard
+				if err := m.clipboard.CopyAllContent(m.viewerContent); err == nil {
+					// Successfully copied - could show brief notification in future
+					// For now, silent success
 				}
 			}
 

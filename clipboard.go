@@ -58,6 +58,17 @@ func (cm *ClipboardManager) GetSelection(content string) string {
 	return extractSelection(lines, cm.selection)
 }
 
+// CopyAllContent copies entire content to system clipboard
+// This is a simple method that always copies all content
+func (cm *ClipboardManager) CopyAllContent(content string) error {
+	if content == "" {
+		return fmt.Errorf("no content to copy")
+	}
+
+	cm.lastCopy = content
+	return clipboard.WriteAll(content)
+}
+
 // CopySelection copies text to system clipboard
 // If a selection is active, copy the selected text
 // Otherwise, copy the entire content
