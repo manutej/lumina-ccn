@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/lumina/ccn/utils"
 )
 
@@ -123,7 +124,7 @@ type AppModel struct {
 	searchInProgress bool
 
 	// Phase 3: File Watcher State
-	fileWatcher               *FileWatcher
+	fileWatcher               FileWatcher
 	watcherActive             bool
 	fileChangedNotification   bool
 	loadingMessage            string
@@ -442,4 +443,41 @@ func navigateCursor(cursor, delta, listLen int) int {
 		return 0 // Wrap to start
 	}
 	return newCursor
+}
+
+// File Watcher Helpers (Phase 3 Week 3)
+
+// stopFileWatcher stops the current file watcher if active
+func (m *AppModel) stopFileWatcher() {
+	if m.fileWatcher != nil && m.watcherActive {
+		m.fileWatcher.Close()
+		m.fileWatcher = nil
+		m.watcherActive = false
+	}
+}
+
+// startFileWatcher starts watching the currently selected file
+func (m *AppModel) startFileWatcher(filePath string) tea.Cmd {
+	// Stop previous watcher
+	m.stopFileWatcher()
+
+	// Create new watcher
+	watcher := NewFileWatcher()
+	if watcher == nil {
+		// Failed to create watcher
+		return nil
+	}
+
+	// Watch the directory containing the file
+	dir := filepath.Dir(filePath)
+	if err := watcher.Watch(dir); err != nil {
+		watcher.Close()
+		return nil
+	}
+
+	m.fileWatcher = watcher
+	m.watcherActive = true
+
+	// Start listening for changes
+	return fileWatcherCmd(watcher)
 }

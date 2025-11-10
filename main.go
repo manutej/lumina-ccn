@@ -110,6 +110,19 @@ func ripgrepSearchCmd(rootPath, query string) tea.Cmd {
 	}
 }
 
+// fileWatcherCmd listens for file changes and sends notifications (Phase 3 Week 3)
+func fileWatcherCmd(watcher FileWatcher) tea.Cmd {
+	return func() tea.Msg {
+		// Block waiting for file change
+		path, ok := <-watcher.Changes()
+		if !ok {
+			// Channel closed, watcher stopped
+			return nil
+		}
+		return FileChangedMsg{path: path}
+	}
+}
+
 // Update handles messages and updates the model
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -164,9 +177,24 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case FileChangedMsg:
-		// Reload file when changed
+		// Reload file when changed (Phase 3 Week 3)
 		if m.selectedFile == msg.path {
+			// Preserve scroll position
+			savedYOffset := m.viewer.YOffset
+
+			// Reload file content
 			m.loadFileContent(msg.path)
+
+			// Restore scroll position
+			m.viewer.YOffset = savedYOffset
+
+			// Show notification (will be displayed in status bar)
+			m.fileChangedNotification = true
+
+			// Continue listening for more changes
+			if m.fileWatcher != nil {
+				return m, fileWatcherCmd(m.fileWatcher)
+			}
 		}
 		return m, nil
 
@@ -226,7 +254,8 @@ func (m AppModel) handleFinderMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.transitionTo(NormalMode)
 			// Load the selected file
 			if err := m.loadFileContent(selected); err == nil {
-				// Successfully loaded file
+				// Successfully loaded file, start file watcher
+				return m, m.startFileWatcher(selected)
 			}
 		}
 		return m, nil
@@ -274,7 +303,8 @@ func (m AppModel) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.loadFileContent(result.FilePath)
 			m.gotoLine(result.Line - 1) // Line numbers are 1-indexed, YOffset is 0-indexed
 			m.transitionTo(NormalMode)
-			return m, nil
+			// Start file watcher for the loaded file
+			return m, m.startFileWatcher(result.FilePath)
 		}
 		// If query is not empty, execute search
 		if m.searchQuery != "" {
@@ -389,6 +419,11 @@ func (m AppModel) handleTOCMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
+	// Clear file changed notification on any keypress
+	if m.fileChangedNotification {
+		m.fileChangedNotification = false
+	}
+
 	// Global keybindings that work in normal mode
 	switch msg.String() {
 	case "?":
@@ -450,7 +485,12 @@ func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		case "open":
 			if m.currentView == FileTreeView {
+				prevFile := m.selectedFile
 				m.navigateToSelectedFile()
+				// If a new file was loaded (not a directory), start watcher
+				if m.selectedFile != "" && m.selectedFile != prevFile {
+					return m, m.startFileWatcher(m.selectedFile)
+				}
 			}
 
 		case "switch_view":
@@ -1039,7 +1079,11 @@ func (m AppModel) View() string {
 		if m.tableOfContents != nil && m.tableOfContents.HasEntries() {
 			tocHint = " | t: TOC"
 		}
-		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | /: fuzzy%s | ^F: search | y: copy | ?: help | q: quit", viewName, tocHint)
+		fileChanged := ""
+		if m.fileChangedNotification {
+			fileChanged = " | 📝 Reloaded"
+		}
+		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | /: fuzzy%s | ^F: search%s | y: copy | ?: help | q: quit", viewName, tocHint, fileChanged)
 	case PreviewView:
 		statusText = fmt.Sprintf("[%s] Tab: switch | /: fuzzy find | ?: help | q: quit", viewName)
 	}
