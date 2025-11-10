@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -41,6 +42,9 @@ type SearchStartedMsg struct {
 type SearchResultMsg struct {
 	result RipgrepResult
 }
+type SearchBatchMsg struct {
+	results []RipgrepResult
+}
 type SearchCompletedMsg struct{}
 type SearchErrorMsg struct {
 	err error
@@ -74,6 +78,36 @@ func dragTimeoutCmd() tea.Cmd {
 	return tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
 		return MouseDragTimeoutMsg{}
 	})
+}
+
+// ripgrepSearchCmd executes ripgrep search and streams results (Phase 3 Week 2)
+func ripgrepSearchCmd(rootPath, query string) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+
+		// Create ripgrep manager with concurrency limit
+		manager := NewRipgrepManager(4)
+
+		// Execute search
+		matchChan, err := manager.Search(ctx, query)
+		if err != nil {
+			return SearchErrorMsg{err: err}
+		}
+
+		// Accumulate results
+		results := []RipgrepResult{}
+		for match := range matchChan {
+			results = append(results, RipgrepResult{
+				FilePath: match.Path,
+				Line:     match.LineNumber,
+				Column:   0, // Column not used yet
+				Text:     strings.TrimSpace(match.Text),
+			})
+		}
+
+		// Return batch of results
+		return SearchBatchMsg{results: results}
+	}
 }
 
 // Update handles messages and updates the model
@@ -110,12 +144,23 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case SearchResultMsg:
-		// Accumulate search results
+		// Accumulate search results (for streaming)
 		m.searchResults = append(m.searchResults, msg.result)
+		return m, nil
+
+	case SearchBatchMsg:
+		// Receive batch of search results
+		m.searchResults = msg.results
+		m.searchInProgress = false
 		return m, nil
 
 	case SearchCompletedMsg:
 		m.searchInProgress = false
+		return m, nil
+
+	case SearchErrorMsg:
+		m.searchInProgress = false
+		// Could show error in status bar or modal
 		return m, nil
 
 	case FileChangedMsg:
@@ -223,34 +268,69 @@ func (m AppModel) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "enter":
-		// Jump to selected result
-		if len(m.searchResults) > 0 && m.searchCursor < len(m.searchResults) {
+		// If query is empty and we have results, jump to selected result
+		if m.searchQuery == "" && len(m.searchResults) > 0 && m.searchCursor < len(m.searchResults) {
 			result := m.searchResults[m.searchCursor]
 			m.loadFileContent(result.FilePath)
-			// TODO: Scroll to line
+			m.gotoLine(result.Line - 1) // Line numbers are 1-indexed, YOffset is 0-indexed
 			m.transitionTo(NormalMode)
+			return m, nil
+		}
+		// If query is not empty, execute search
+		if m.searchQuery != "" {
+			m.searchResults = []RipgrepResult{} // Clear previous results
+			m.searchCursor = 0
+			m.searchInProgress = true
+			return m, ripgrepSearchCmd(m.rootPath, m.searchQuery)
+		}
+		return m, nil
+
+	case "backspace":
+		// Delete last character from query
+		if len(m.searchQuery) > 0 {
+			m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
 		}
 		return m, nil
 
 	case "up", "ctrl+p", "k":
-		m.searchCursor = navigateCursor(m.searchCursor, -1, len(m.searchResults))
+		// Only navigate if we have results
+		if len(m.searchResults) > 0 {
+			m.searchCursor = navigateCursor(m.searchCursor, -1, len(m.searchResults))
+		}
 		return m, nil
 
 	case "down", "ctrl+n", "j":
-		m.searchCursor = navigateCursor(m.searchCursor, 1, len(m.searchResults))
+		// Only navigate if we have results
+		if len(m.searchResults) > 0 {
+			m.searchCursor = navigateCursor(m.searchCursor, 1, len(m.searchResults))
+		}
 		return m, nil
 
 	case "n":
 		// Next match
-		m.searchCursor = navigateCursor(m.searchCursor, 1, len(m.searchResults))
+		if len(m.searchResults) > 0 {
+			m.searchCursor = navigateCursor(m.searchCursor, 1, len(m.searchResults))
+		}
 		return m, nil
 
 	case "N":
 		// Previous match
-		m.searchCursor = navigateCursor(m.searchCursor, -1, len(m.searchResults))
+		if len(m.searchResults) > 0 {
+			m.searchCursor = navigateCursor(m.searchCursor, -1, len(m.searchResults))
+		}
+		return m, nil
+
+	case "ctrl+c":
+		return m, tea.Quit
+
+	default:
+		// Add character to search query
+		key := msg.String()
+		if len(key) == 1 && key[0] >= 32 && key[0] <= 126 { // Printable ASCII
+			m.searchQuery += key
+		}
 		return m, nil
 	}
-	return m, nil
 }
 
 func (m AppModel) handleLoadingMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -711,8 +791,12 @@ func (m AppModel) renderSearchModal() string {
 
 	var content strings.Builder
 
-	// Search query input
-	content.WriteString(titleStyle.Render("🔍 Search: " + m.searchQuery))
+	// Search query input with cursor
+	queryDisplay := m.searchQuery + "█"
+	if m.searchQuery == "" {
+		queryDisplay = "█" // Show cursor when empty
+	}
+	content.WriteString(titleStyle.Render("🔍 Search: " + queryDisplay))
 	content.WriteString("\n\n")
 
 	// Results
@@ -955,7 +1039,7 @@ func (m AppModel) View() string {
 		if m.tableOfContents != nil && m.tableOfContents.HasEntries() {
 			tocHint = " | t: TOC"
 		}
-		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | /: find%s | y: copy | ?: help | q: quit", viewName, tocHint)
+		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | /: fuzzy%s | ^F: search | y: copy | ?: help | q: quit", viewName, tocHint)
 	case PreviewView:
 		statusText = fmt.Sprintf("[%s] Tab: switch | /: fuzzy find | ?: help | q: quit", viewName)
 	}
