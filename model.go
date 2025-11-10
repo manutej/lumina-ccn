@@ -20,13 +20,15 @@ const (
 	PreviewView
 )
 
-// UIMode represents the current UI interaction mode
+// UIMode represents the current UI interaction mode (State Machine)
 type UIMode int
 
 const (
 	NormalMode UIMode = iota
 	FinderMode
 	SearchMode
+	HelpMode
+	LoadingMode
 )
 
 // SelectionMode represents text selection state in viewer
@@ -77,13 +79,15 @@ type AppModel struct {
 	preview          viewport.Model
 	markdownRenderer *utils.MarkdownRenderer
 
-	// State
+	// State Machine - Only ONE state active at a time
+	currentMode UIMode
+
+	// View State
 	currentView    ViewMode
 	selectionMode  SelectionMode // Track selection mode for keyboard-based selection
 	selectedFile   string
 	markdownFiles  []string
-	showHelp       bool // Toggle for help overlay
-	selectionStart int  // Character position where selection starts
+	selectionStart int // Character position where selection starts
 
 	// Mouse drag state
 	mouseDragActive    bool // Whether mouse drag is currently happening
@@ -99,18 +103,29 @@ type AppModel struct {
 	viewerWidth   int // 60% of width
 	previewWidth  int // 20% of width
 
-	// NEW: Custom keybindings, clipboard, and color management
+	// Custom keybindings, clipboard, and color management
 	keyBindings     *KeyBindings
 	clipboard       *ClipboardManager
 	colorManager    *ColorManager
 	tableOfContents *TableOfContents // TOC for current file
 
-	// Phase 3: Fuzzy Finder Integration
-	currentMode    UIMode
-	finderActive   bool
+	// Phase 3: Fuzzy Finder State (flat, no helper object)
 	finderInput    string
-	finderSelected int
-	fuzzyFinder    *FuzzyFinderImpl
+	finderCursor   int
+	finderItems    []string
+	finderFiltered []string
+
+	// Phase 3: Ripgrep Search State (flat)
+	searchQuery      string
+	searchResults    []RipgrepResult
+	searchCursor     int
+	searchInProgress bool
+
+	// Phase 3: File Watcher State
+	fileWatcher               *FileWatcher
+	watcherActive             bool
+	fileChangedNotification   bool
+	loadingMessage            string
 }
 
 // NewAppModel creates a new application model
@@ -135,9 +150,6 @@ func NewAppModel(rootPath string) AppModel {
 	colorManager, _ := NewColorManager()
 	toc := NewTableOfContents()
 
-	// Initialize fuzzy finder with empty list (will be populated when activated)
-	fuzzyFinder := NewFuzzyFinderImpl([]string{})
-
 	m := AppModel{
 		rootPath:         rootPath,
 		currentPath:      rootPath,
@@ -151,12 +163,23 @@ func NewAppModel(rootPath string) AppModel {
 		clipboard:        clipboard,
 		colorManager:     colorManager,
 		tableOfContents:  toc,
-		// Phase 3: Fuzzy Finder
-		currentMode:    NormalMode,
-		finderActive:   false,
+		// Phase 3: State Machine
+		currentMode: NormalMode,
+		// Phase 3: Fuzzy Finder State (flat)
 		finderInput:    "",
-		finderSelected: 0,
-		fuzzyFinder:    fuzzyFinder,
+		finderCursor:   0,
+		finderItems:    []string{},
+		finderFiltered: []string{},
+		// Phase 3: Search State
+		searchQuery:      "",
+		searchResults:    []RipgrepResult{},
+		searchCursor:     0,
+		searchInProgress: false,
+		// Phase 3: File Watcher
+		fileWatcher:             nil,
+		watcherActive:           false,
+		fileChangedNotification: false,
+		loadingMessage:          "",
 		// Set default dimensions for immediate display
 		width:  120,  // Default width
 		height: 40,   // Default height
@@ -350,4 +373,67 @@ func (m *AppModel) navigateUp() {
 	m.currentPath = parent
 	items := loadDirectory(parent)
 	m.fileList.SetItems(items)
+}
+
+// RipgrepResult represents a single search result from ripgrep
+type RipgrepResult struct {
+	FilePath string
+	Line     int
+	Column   int
+	Text     string
+}
+
+// State Transition Functions (Blocker 4 Fix)
+
+// transitionTo cleanly transitions between UI modes
+func (m *AppModel) transitionTo(newMode UIMode) {
+	// Clean up old state
+	switch m.currentMode {
+	case FinderMode:
+		m.finderInput = ""
+		m.finderCursor = 0
+		m.finderFiltered = []string{}
+	case SearchMode:
+		m.searchQuery = ""
+		m.searchCursor = 0
+	case HelpMode:
+		// No cleanup needed
+	case LoadingMode:
+		m.loadingMessage = ""
+	}
+
+	m.currentMode = newMode
+}
+
+// Pure Helper Functions (Blocker 2 Fix)
+
+// filterItems performs case-insensitive substring filtering
+func filterItems(items []string, query string) []string {
+	if query == "" {
+		return items
+	}
+
+	var filtered []string
+	lowerQuery := strings.ToLower(query)
+	for _, item := range items {
+		if strings.Contains(strings.ToLower(item), lowerQuery) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+// navigateCursor wraps cursor navigation with boundary checking
+func navigateCursor(cursor, delta, listLen int) int {
+	if listLen == 0 {
+		return 0
+	}
+	newCursor := cursor + delta
+	if newCursor < 0 {
+		return listLen - 1 // Wrap to end
+	}
+	if newCursor >= listLen {
+		return 0 // Wrap to start
+	}
+	return newCursor
 }
