@@ -290,6 +290,16 @@ func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Letter jump navigation: Shift+Letter to jump to next file starting with that letter
+	if m.currentView == FileTreeView && len(msg.String()) == 1 {
+		char := msg.String()
+		// Check if it's an uppercase letter (Shift+letter)
+		if char >= "A" && char <= "Z" {
+			m.jumpToNextFileStartingWith(char)
+			return m, nil
+		}
+	}
+
 	// Use configurable keybindings for other actions
 	viewName := []string{"filetree", "viewer", "preview"}[m.currentView]
 	action := m.keyBindings.FindAction(msg.String(), viewName)

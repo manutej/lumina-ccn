@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0-alpha] - 2025-11-11
+
+### Phase 3 Week 1+ - Letter Jump Navigation
+
+**Phase**: Phase 3 Week 1+
+**Build Date**: 2025-11-11
+
+#### Added
+
+##### Quick Letter Jump Navigation
+- **Shift+Letter** keybinding in File Tree for instant file navigation
+- Press Shift+R to jump to next file starting with 'R' (case-insensitive)
+- Automatically wraps around to beginning when reaching end of list
+- Skips parent directory ".." entry for cleaner navigation
+- Intuitive and fast file lookup similar to Vim's file browsers
+- **Implementation**: `jumpToNextFileStartingWith()` in `model.go` (45 lines)
+
+#### Changed
+
+- **help.go**:
+  - Updated CLI help (`--keys`) to document Shift+Letter navigation
+  - Updated in-app help overlay (?) to show new keybinding
+
+- **main.go**:
+  - Added letter jump detection in `handleNormalMode()`
+  - Checks for uppercase letters (A-Z) when in FileTreeView
+  - Routes to `jumpToNextFileStartingWith()` for processing
+
+- **version.go**:
+  - Version bump: `1.0.1-alpha` → `1.3.0-alpha`
+  - Phase update: `Phase 1.5` → `Phase 3 Week 1+`
+  - Build date: `2025-10-21` → `2025-11-11`
+
+#### Technical Details
+
+- **Algorithm**: Two-pass search (current+1 to end, then 0 to current) for wrap-around behavior
+- **Performance**: O(n) worst case, typically O(1) for common cases
+- **Case Handling**: Case-insensitive matching (Shift+R matches "README", "readme", "React.md")
+- **Edge Cases**: Handles empty lists, no matches, single file, parent directory skipping
+
+#### User Experience Improvements
+
+✅ **Faster file navigation** - No need to scroll through long file lists
+✅ **Intuitive interface** - Natural Shift+Letter convention
+✅ **Consistent behavior** - Wraps around like other Vim-style navigation
+✅ **Well documented** - Available in both CLI and in-app help
+
+---
+
 ## [1.0.1-alpha] - 2025-10-21
 
 ### Phase 1.5 - Four Game-Changing Features

@@ -375,6 +375,53 @@ func (m *AppModel) navigateUp() {
 	m.fileList.SetItems(items)
 }
 
+// jumpToNextFileStartingWith jumps to the next file/directory starting with the given letter
+// This enables quick navigation via Shift+Letter (e.g., Shift+R to jump to files starting with 'R')
+func (m *AppModel) jumpToNextFileStartingWith(letter string) {
+	items := m.fileList.Items()
+	if len(items) == 0 {
+		return
+	}
+
+	// Get current index
+	currentIndex := m.fileList.Index()
+
+	// Convert search letter to lowercase for case-insensitive matching
+	searchLetter := strings.ToLower(letter)
+
+	// Search from current+1 to end
+	for i := currentIndex + 1; i < len(items); i++ {
+		if item, ok := items[i].(FileItem); ok {
+			// Skip ".." parent directory entry
+			if item.name == ".." {
+				continue
+			}
+			// Check if name starts with the letter (case-insensitive)
+			if strings.HasPrefix(strings.ToLower(item.name), searchLetter) {
+				m.fileList.Select(i)
+				return
+			}
+		}
+	}
+
+	// Wrap around: search from beginning to current
+	for i := 0; i <= currentIndex; i++ {
+		if item, ok := items[i].(FileItem); ok {
+			// Skip ".." parent directory entry
+			if item.name == ".." {
+				continue
+			}
+			// Check if name starts with the letter (case-insensitive)
+			if strings.HasPrefix(strings.ToLower(item.name), searchLetter) {
+				m.fileList.Select(i)
+				return
+			}
+		}
+	}
+
+	// If no match found, do nothing (stay at current position)
+}
+
 // RipgrepResult represents a single search result from ripgrep
 type RipgrepResult struct {
 	FilePath string
