@@ -325,11 +325,6 @@ func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "open":
-			if m.currentView == FileTreeView {
-				m.navigateToSelectedFile()
-			}
-
 		case "switch_view":
 			m.currentView = (m.currentView + 1) % 3
 			m.clipboard.ClearSelection() // Clear selection when switching views
@@ -339,14 +334,18 @@ func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "down":
 			if m.currentView == FileTreeView {
 				m.fileList, cmd = m.fileList.Update(msg)
+				return m, cmd
+			} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
+				m.contextPanel.GetTOC().SelectNext()
 			}
-			return m, cmd
 
 		case "up":
 			if m.currentView == FileTreeView {
 				m.fileList, cmd = m.fileList.Update(msg)
+				return m, cmd
+			} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
+				m.contextPanel.GetTOC().SelectPrevious()
 			}
-			return m, cmd
 
 		// Viewer scrolling
 		case "scroll_down":
@@ -382,11 +381,39 @@ func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "top":
 			if m.currentView == ViewerView {
 				m.viewer.GotoTop()
+			} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
+				m.contextPanel.GetTOC().SelectFirst()
 			}
 
 		case "bottom":
 			if m.currentView == ViewerView {
 				m.viewer.GotoBottom()
+			} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
+				m.contextPanel.GetTOC().SelectLast()
+			}
+
+		// Context Panel (PreviewView) - Mode switching
+		case "m":
+			// Cycle through panel modes: TOC → File Info → Stats → Quick Actions
+			if m.currentView == PreviewView {
+				m.contextPanel.CycleMode()
+			}
+
+		case "open":
+			// File tree: navigate into file/directory
+			if m.currentView == FileTreeView {
+				m.navigateToSelectedFile()
+			// Context Panel: Jump to selected TOC entry in viewer
+			} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
+				if entry := m.contextPanel.GetTOC().GetSelectedEntry(); entry != nil {
+					m.viewer.GotoTop()
+					// Jump to the line number
+					for i := 0; i < entry.LineNum; i++ {
+						m.viewer.LineDown(1)
+					}
+					// Switch to viewer pane to show the jumped location
+					m.currentView = ViewerView
+				}
 			}
 
 		// NEW: Copy functionality
@@ -813,14 +840,20 @@ func (m AppModel) View() string {
 		Width(m.viewerWidth).
 		Render(m.viewer.View())
 
-	// Preview pane
+	// Preview pane - Context Panel (TOC, File Info, Stats, Quick Actions)
 	previewStyle := paneStyle
 	if m.currentView == PreviewView {
 		previewStyle = activePaneStyle
 	}
+
+	previewContent := "📋 Context Panel\n\n(Open a markdown file to see content)"
+	if m.selectedFile != "" {
+		previewContent = m.contextPanel.Render(m.previewWidth, m.height, m.colorManager)
+	}
+
 	previewPane := previewStyle.
 		Width(m.previewWidth).
-		Render("Preview\n(Coming soon)")
+		Render(previewContent)
 
 	// Join panes horizontally
 	content := lipgloss.JoinHorizontal(
@@ -844,7 +877,12 @@ func (m AppModel) View() string {
 	case ViewerView:
 		statusText = fmt.Sprintf("[%s] Tab: switch | j/k: scroll | d/u: page | g/G: top/bottom | /: fuzzy find | y: copy | ?: help | q: quit", viewName)
 	case PreviewView:
-		statusText = fmt.Sprintf("[%s] Tab: switch | /: fuzzy find | ?: help | q: quit", viewName)
+		modeName := m.contextPanel.GetModeName()
+		if m.contextPanel.GetTOC().HasEntries() && m.contextPanel.currentMode == TOCMode {
+			statusText = fmt.Sprintf("[%s: %s] j/k: nav | Enter: jump | m: mode | ?: help | q: quit", viewName, modeName)
+		} else {
+			statusText = fmt.Sprintf("[%s: %s] m: mode | ?: help | q: quit", viewName, modeName)
+		}
 	}
 
 	status := statusStyle.Render(statusText)
