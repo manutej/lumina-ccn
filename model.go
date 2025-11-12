@@ -104,10 +104,10 @@ type AppModel struct {
 	previewWidth  int // 20% of width
 
 	// Custom keybindings, clipboard, and color management
-	keyBindings     *KeyBindings
-	clipboard       *ClipboardManager
-	colorManager    *ColorManager
-	tableOfContents *TableOfContents // TOC for current file
+	keyBindings  *KeyBindings
+	clipboard    *ClipboardManager
+	colorManager *ColorManager
+	contextPanel *ContextPanel // Multi-mode right panel (TOC, File Info, Stats, etc.)
 
 	// Phase 3: Fuzzy Finder State (flat, no helper object)
 	finderInput    string
@@ -148,7 +148,7 @@ func NewAppModel(rootPath string) AppModel {
 	keyBindings := LoadKeyBindings()
 	clipboard := NewClipboardManager()
 	colorManager, _ := NewColorManager()
-	toc := NewTableOfContents()
+	contextPanel := NewContextPanel()
 
 	m := AppModel{
 		rootPath:         rootPath,
@@ -162,7 +162,7 @@ func NewAppModel(rootPath string) AppModel {
 		keyBindings:      &keyBindings,
 		clipboard:        clipboard,
 		colorManager:     colorManager,
-		tableOfContents:  toc,
+		contextPanel:     contextPanel,
 		// Phase 3: State Machine
 		currentMode: NormalMode,
 		// Phase 3: Fuzzy Finder State (flat)
@@ -310,7 +310,7 @@ func (m *AppModel) loadFileContent(path string) error {
 	m.viewerContent = string(content)
 	m.selectedFile = path
 
-	// If it's a markdown file, render it with Glamour and parse TOC
+	// If it's a markdown file, render it with Glamour and update context panel
 	if strings.HasSuffix(path, ".md") && m.markdownRenderer != nil {
 		rendered, err := m.markdownRenderer.Render(m.viewerContent)
 		if err != nil {
@@ -321,18 +321,18 @@ func (m *AppModel) loadFileContent(path string) error {
 		}
 		m.viewer.SetContent(m.renderedContent)
 
-		// Parse markdown headers for table of contents
-		if m.tableOfContents != nil {
-			m.tableOfContents.ParseMarkdown(m.viewerContent)
+		// Update context panel with file analysis (TOC, stats, metadata)
+		if m.contextPanel != nil {
+			m.contextPanel.UpdateContent(path, m.viewerContent)
 		}
 	} else {
 		// For non-markdown files, show plain text
 		m.renderedContent = m.viewerContent
 		m.viewer.SetContent(m.viewerContent)
 
-		// Clear TOC for non-markdown files
-		if m.tableOfContents != nil {
-			m.tableOfContents.ParseMarkdown("")
+		// Clear context panel for non-markdown files
+		if m.contextPanel != nil {
+			m.contextPanel.Clear()
 		}
 	}
 
@@ -373,6 +373,53 @@ func (m *AppModel) navigateUp() {
 	m.currentPath = parent
 	items := loadDirectory(parent)
 	m.fileList.SetItems(items)
+}
+
+// jumpToNextFileStartingWith jumps to the next file/directory starting with the given letter
+// This enables quick navigation via Shift+Letter (e.g., Shift+R to jump to files starting with 'R')
+func (m *AppModel) jumpToNextFileStartingWith(letter string) {
+	items := m.fileList.Items()
+	if len(items) == 0 {
+		return
+	}
+
+	// Get current index
+	currentIndex := m.fileList.Index()
+
+	// Convert search letter to lowercase for case-insensitive matching
+	searchLetter := strings.ToLower(letter)
+
+	// Search from current+1 to end
+	for i := currentIndex + 1; i < len(items); i++ {
+		if item, ok := items[i].(FileItem); ok {
+			// Skip ".." parent directory entry
+			if item.name == ".." {
+				continue
+			}
+			// Check if name starts with the letter (case-insensitive)
+			if strings.HasPrefix(strings.ToLower(item.name), searchLetter) {
+				m.fileList.Select(i)
+				return
+			}
+		}
+	}
+
+	// Wrap around: search from beginning to current
+	for i := 0; i <= currentIndex; i++ {
+		if item, ok := items[i].(FileItem); ok {
+			// Skip ".." parent directory entry
+			if item.name == ".." {
+				continue
+			}
+			// Check if name starts with the letter (case-insensitive)
+			if strings.HasPrefix(strings.ToLower(item.name), searchLetter) {
+				m.fileList.Select(i)
+				return
+			}
+		}
+	}
+
+	// If no match found, do nothing (stay at current position)
 }
 
 // RipgrepResult represents a single search result from ripgrep

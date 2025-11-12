@@ -7,6 +7,197 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0-alpha] - 2025-11-11
+
+### Phase 3 Week 2 - Multi-Mode Context Panel
+
+**Phase**: Phase 3 Week 2
+**Build Date**: 2025-11-11
+
+#### Added
+
+##### Comprehensive Context Panel System (Right Pane)
+Transformed the right panel from a placeholder into a **multi-mode context panel** with 4 intelligent display modes:
+
+**1. 📋 Table of Contents Mode** (Default)
+- Auto-extracts all markdown headings (H1-H6) with hierarchical display
+- Navigate with `j/k` or arrow keys
+- Press `Enter` to jump to selected heading in viewer (auto-switches pane)
+- Press `g/G` to jump to first/last heading
+- Shows total heading count in status bar
+- **Implementation**: Full integration of existing `toc.go` with new context panel
+
+**2. 📄 File Info Mode**
+- **Metadata Display**:
+  - File name and full path
+  - File size (human-readable: KB, MB, etc.)
+  - Line count, word count, character count
+  - Reading time estimate (based on 200 words/min)
+  - Last modified timestamp
+- Perfect for quick document assessment
+
+**3. 📈 Document Stats Mode**
+- **Structural Analysis**:
+  - Heading breakdown by level (H1-H6 counts)
+  - Code block count
+  - Link count (excluding images)
+  - Image count
+  - List item count
+  - Table row count
+- Ideal for understanding document complexity
+
+**4. ⚡ Quick Actions Mode**
+- **Coming Soon**: Copy path, copy filename, copy content
+- **Planned**: Open in $EDITOR, show git status, reveal in tree
+- Foundation laid for future productivity shortcuts
+
+##### Mode Switching
+- Press `m` in Context Panel (PreviewView) to cycle through modes
+- Modes cycle: TOC → File Info → Stats → Quick Actions → TOC
+- Current mode shown in status bar: "[PREVIEW: Table of Contents]"
+- Seamless state preservation when switching modes
+
+##### Smart Content Analysis
+- Auto-analyzes markdown files on load
+- Updates all modes simultaneously (TOC, stats, metadata)
+- Regex-based structural parsing for accuracy
+- Handles edge cases (code blocks, nested lists, tables)
+
+#### Changed
+
+- **context_panel.go** (NEW FILE - 385 lines):
+  - `ContextPanel` struct with 4 modes
+  - `UpdateContent()` - Analyzes file and populates all modes
+  - `Render()` - Dynamic rendering based on current mode
+  - `CycleMode()` - Mode switching logic
+  - `formatBytes()` - Human-readable file sizes
+
+- **model.go**:
+  - Replaced `tableOfContents *TableOfContents` with `contextPanel *ContextPanel`
+  - Initialize `NewContextPanel()` in `NewAppModel()`
+  - Call `contextPanel.UpdateContent()` in `loadFileContent()`
+  - Call `contextPanel.Clear()` for non-markdown files
+
+- **main.go**:
+  - Render context panel in preview pane with `contextPanel.Render()`
+  - Dynamic status bar showing current mode name
+  - TOC-specific status when in TOC mode with entries
+  - Added keybinding handlers:
+    - `m` - Cycle context panel modes
+    - `j/k/↑/↓` - Navigate TOC entries (PreviewView + TOCMode)
+    - `g/G` - Jump to first/last TOC entry
+    - `Enter` - Jump to selected heading and switch to viewer
+  - Unified navigation logic across panes
+
+- **help.go**:
+  - Added "CONTEXT PANEL (Right Pane)" section to CLI help
+  - Added context panel section to in-app help overlay
+  - Documented all keybindings: m, j/k, Enter, g/G
+
+- **version.go**:
+  - Version bump: `1.3.0-alpha` → `1.4.0-alpha`
+  - Phase update: `Phase 3 Week 1+` → `Phase 3 Week 2`
+
+#### Technical Details
+
+**Architecture**:
+- **Single source of truth**: ContextPanel owns all right pane state
+- **Lazy analysis**: Content analyzed once per file load, not per mode switch
+- **Pure rendering**: Mode switching just changes view, no re-computation
+- **Type-safe modes**: Enum-based mode system prevents invalid states
+
+**Performance**:
+- File analysis: O(n) where n = file lines (single pass)
+- Mode switching: O(1) - instant
+- TOC navigation: O(1) per operation
+- Memory overhead: ~2KB per file (TOC + stats)
+
+**Regex Patterns**:
+- Headings: `^(#{1,6})\s+(.+)$`
+- Code blocks: `` ^``` ``
+- Links: `\[.*?\]\(.*?\)`
+- Images: `!\[.*?\]\(.*?\)`
+- Lists: `^\s*[-*+]\s+`
+- Tables: `^\|.*\|$`
+
+#### User Experience Improvements
+
+✅ **Comprehensive file understanding** - 4 perspectives on same content
+✅ **Instant mode switching** - No lag, no re-computation
+✅ **Intuitive navigation** - Vim-style j/k, Enter to jump
+✅ **Rich metadata** - File size, word count, reading time at a glance
+✅ **Document complexity** - Quick assessment via stats mode
+✅ **Smart TOC integration** - Preserves all existing toc.go functionality
+✅ **Status bar awareness** - Always know which mode you're in
+✅ **Help documentation** - Fully documented in CLI and in-app help
+
+#### Files Created
+
+```
+context_panel.go (NEW - 385 lines)
+```
+
+#### Files Modified
+
+```
+model.go         (+15 lines, -5 lines)   - Context panel integration
+main.go          (+80 lines, -10 lines)  - UI rendering + keybindings
+help.go          (+22 lines)             - Documentation updates
+version.go       (+2 lines, -2 lines)    - Version bump
+CHANGELOG.md     (+X lines)              - This entry
+```
+
+---
+
+## [1.3.0-alpha] - 2025-11-11
+
+### Phase 3 Week 1+ - Letter Jump Navigation
+
+**Phase**: Phase 3 Week 1+
+**Build Date**: 2025-11-11
+
+#### Added
+
+##### Quick Letter Jump Navigation
+- **Shift+Letter** keybinding in File Tree for instant file navigation
+- Press Shift+R to jump to next file starting with 'R' (case-insensitive)
+- Automatically wraps around to beginning when reaching end of list
+- Skips parent directory ".." entry for cleaner navigation
+- Intuitive and fast file lookup similar to Vim's file browsers
+- **Implementation**: `jumpToNextFileStartingWith()` in `model.go` (45 lines)
+
+#### Changed
+
+- **help.go**:
+  - Updated CLI help (`--keys`) to document Shift+Letter navigation
+  - Updated in-app help overlay (?) to show new keybinding
+
+- **main.go**:
+  - Added letter jump detection in `handleNormalMode()`
+  - Checks for uppercase letters (A-Z) when in FileTreeView
+  - Routes to `jumpToNextFileStartingWith()` for processing
+
+- **version.go**:
+  - Version bump: `1.0.1-alpha` → `1.3.0-alpha`
+  - Phase update: `Phase 1.5` → `Phase 3 Week 1+`
+  - Build date: `2025-10-21` → `2025-11-11`
+
+#### Technical Details
+
+- **Algorithm**: Two-pass search (current+1 to end, then 0 to current) for wrap-around behavior
+- **Performance**: O(n) worst case, typically O(1) for common cases
+- **Case Handling**: Case-insensitive matching (Shift+R matches "README", "readme", "React.md")
+- **Edge Cases**: Handles empty lists, no matches, single file, parent directory skipping
+
+#### User Experience Improvements
+
+✅ **Faster file navigation** - No need to scroll through long file lists
+✅ **Intuitive interface** - Natural Shift+Letter convention
+✅ **Consistent behavior** - Wraps around like other Vim-style navigation
+✅ **Well documented** - Available in both CLI and in-app help
+
+---
+
 ## [1.0.1-alpha] - 2025-10-21
 
 ### Phase 1.5 - Four Game-Changing Features

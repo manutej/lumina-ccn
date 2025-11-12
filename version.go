@@ -2,11 +2,11 @@ package main
 
 const (
 	// Version is the current version of CCN
-	Version = "1.0.1-alpha"
+	Version = "1.4.0-alpha"
 
 	// BuildPhase indicates the development phase
-	BuildPhase = "Phase 1.5"
+	BuildPhase = "Phase 3 Week 2"
 
 	// BuildDate will be set during build
-	BuildDate = "2025-10-21"
+	BuildDate = "2025-11-11"
 )
