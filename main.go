@@ -199,7 +199,7 @@ func (m AppModel) handleFinderMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(m.finderInput) > 0 {
 			m.finderInput = m.finderInput[:len(m.finderInput)-1]
 			m.finderFiltered = filterItems(m.finderItems, m.finderInput) // Blocker 2: Pure function
-			m.finderCursor = 0 // Reset cursor to top
+			m.finderCursor = 0                                           // Reset cursor to top
 		}
 		return m, nil
 
@@ -208,7 +208,7 @@ func (m AppModel) handleFinderMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(msg.String()) == 1 {
 			m.finderInput += msg.String()
 			m.finderFiltered = filterItems(m.finderItems, m.finderInput) // Blocker 2: Pure function
-			m.finderCursor = 0 // Reset cursor to top
+			m.finderCursor = 0                                           // Reset cursor to top
 		}
 		return m, nil
 	}
@@ -311,152 +311,157 @@ func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Execute action
 	switch action {
-		// App controls
-		case "quit":
-			return m, tea.Quit
+	// App controls
+	case "quit":
+		return m, tea.Quit
 
-		// Navigation
-		case "back":
-			if m.currentView == FileTreeView {
-				if m.fileList.FilterState() == list.Filtering {
-					m.fileList.ResetFilter()
-				} else {
-					m.navigateUp()
-				}
+	// Navigation
+	case "back":
+		if m.currentView == FileTreeView {
+			if m.fileList.FilterState() == list.Filtering {
+				m.fileList.ResetFilter()
+			} else {
+				m.navigateUp()
 			}
-
-		case "switch_view":
-			m.currentView = (m.currentView + 1) % 3
-			m.clipboard.ClearSelection() // Clear selection when switching views
-			m.mouseDragActive = false    // Reset drag state when switching views
-
-		// File tree navigation
-		case "down":
-			if m.currentView == FileTreeView {
-				m.fileList, cmd = m.fileList.Update(msg)
-				return m, cmd
-			} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
-				m.contextPanel.GetTOC().SelectNext()
-			}
-
-		case "up":
-			if m.currentView == FileTreeView {
-				m.fileList, cmd = m.fileList.Update(msg)
-				return m, cmd
-			} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
-				m.contextPanel.GetTOC().SelectPrevious()
-			}
-
-		// Viewer scrolling
-		case "scroll_down":
-			if m.currentView == ViewerView {
-				m.viewer.LineDown(1)
-			}
-
-		case "scroll_up":
-			if m.currentView == ViewerView {
-				m.viewer.LineUp(1)
-			}
-
-		case "page_down":
-			if m.currentView == ViewerView {
-				m.viewer.HalfViewDown()
-			}
-
-		case "page_up":
-			if m.currentView == ViewerView {
-				m.viewer.HalfViewUp()
-			}
-
-		case "view_down":
-			if m.currentView == ViewerView {
-				m.viewer.ViewDown()
-			}
-
-		case "view_up":
-			if m.currentView == ViewerView {
-				m.viewer.ViewUp()
-			}
-
-		case "top":
-			if m.currentView == ViewerView {
-				m.viewer.GotoTop()
-			} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
-				m.contextPanel.GetTOC().SelectFirst()
-			}
-
-		case "bottom":
-			if m.currentView == ViewerView {
-				m.viewer.GotoBottom()
-			} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
-				m.contextPanel.GetTOC().SelectLast()
-			}
-
-		// Context Panel (PreviewView) - Mode switching
-		case "m":
-			// Cycle through panel modes: TOC → File Info → Stats → Quick Actions
-			if m.currentView == PreviewView {
-				m.contextPanel.CycleMode()
-			}
-
-		case "open":
-			// File tree: navigate into file/directory
-			if m.currentView == FileTreeView {
-				m.navigateToSelectedFile()
-			// Context Panel: Jump to selected TOC entry in viewer
-			} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
-				if entry := m.contextPanel.GetTOC().GetSelectedEntry(); entry != nil {
-					m.viewer.GotoTop()
-					// Jump to the line number
-					for i := 0; i < entry.LineNum; i++ {
-						m.viewer.LineDown(1)
-					}
-					// Switch to viewer pane to show the jumped location
-					m.currentView = ViewerView
-				}
-			}
-
-		// NEW: Copy functionality
-		case "copy":
-			debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if debugFile != nil {
-				sl, sc, el, ec := m.clipboard.GetSelectionBounds()
-				fmt.Fprintf(debugFile, "COPY KEY PRESSED: Selection bounds: %d:%d to %d:%d, HasSelection=%v\n",
-					sl, sc, el, ec, m.clipboard.HasSelection())
-				debugFile.Close()
-			}
-			if m.currentView == ViewerView {
-				if err := m.clipboard.CopySelection(m.viewerContent); err == nil {
-					debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-					if debugFile != nil {
-						fmt.Fprintf(debugFile, "  → COPY SUCCESSFUL\n")
-						debugFile.Close()
-					}
-					// Copied! Could show status message
-					// For now, selection clears
-					m.clipboard.ClearSelection()
-				} else {
-					debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-					if debugFile != nil {
-						fmt.Fprintf(debugFile, "  → COPY FAILED: %v\n", err)
-						debugFile.Close()
-					}
-				}
-			}
-
-		// Filter
-		case "filter":
-			if m.currentView == FileTreeView {
-				// Toggle filter - let bubbles handle it
-				if m.fileList.FilterState() != list.Filtering {
-					m.fileList.SetFilteringEnabled(true)
-				}
-			}
-
-		case "help":
-			m.transitionTo(HelpMode)
-			return m, nil
 		}
+
+	case "switch_view":
+		m.currentView = (m.currentView + 1) % 3
+		m.clipboard.ClearSelection() // Clear selection when switching views
+		m.mouseDragActive = false    // Reset drag state when switching views
+
+	// File tree navigation
+	case "down":
+		if m.currentView == FileTreeView {
+			m.fileList, cmd = m.fileList.Update(msg)
+			return m, cmd
+		} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
+			m.contextPanel.GetTOC().SelectNext()
+		}
+
+	case "up":
+		if m.currentView == FileTreeView {
+			m.fileList, cmd = m.fileList.Update(msg)
+			return m, cmd
+		} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
+			m.contextPanel.GetTOC().SelectPrevious()
+		}
+
+	// Viewer scrolling
+	case "scroll_down":
+		if m.currentView == ViewerView {
+			m.viewer.LineDown(1)
+		}
+
+	case "scroll_up":
+		if m.currentView == ViewerView {
+			m.viewer.LineUp(1)
+		}
+
+	case "page_down":
+		if m.currentView == ViewerView {
+			m.viewer.HalfViewDown()
+		}
+
+	case "page_up":
+		if m.currentView == ViewerView {
+			m.viewer.HalfViewUp()
+		}
+
+	case "view_down":
+		if m.currentView == ViewerView {
+			m.viewer.ViewDown()
+		}
+
+	case "view_up":
+		if m.currentView == ViewerView {
+			m.viewer.ViewUp()
+		}
+
+	case "top":
+		if m.currentView == ViewerView {
+			m.viewer.GotoTop()
+		} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
+			m.contextPanel.GetTOC().SelectFirst()
+		}
+
+	case "bottom":
+		if m.currentView == ViewerView {
+			m.viewer.GotoBottom()
+		} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
+			m.contextPanel.GetTOC().SelectLast()
+		}
+
+	// Context Panel (PreviewView) - Mode switching
+	case "m":
+		// Cycle through panel modes: TOC → File Info → Stats → Quick Actions
+		if m.currentView == PreviewView {
+			m.contextPanel.CycleMode()
+		}
+
+	case "open":
+		// File tree: navigate into file/directory
+		if m.currentView == FileTreeView {
+			m.navigateToSelectedFile()
+			// Context Panel: Jump to selected TOC entry in viewer
+		} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
+			if entry := m.contextPanel.GetTOC().GetSelectedEntry(); entry != nil {
+				m.viewer.GotoTop()
+				// Jump to the line number
+				for i := 0; i < entry.LineNum; i++ {
+					m.viewer.LineDown(1)
+				}
+				// Switch to viewer pane to show the jumped location
+				m.currentView = ViewerView
+			}
+		}
+
+	// NEW: Copy functionality
+	case "copy":
+		debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if debugFile != nil {
+			sl, sc, el, ec := m.clipboard.GetSelectionBounds()
+			fmt.Fprintf(debugFile, "COPY KEY PRESSED: Selection bounds: %d:%d to %d:%d, HasSelection=%v\n",
+				sl, sc, el, ec, m.clipboard.HasSelection())
+			debugFile.Close()
+		}
+		if m.currentView == ViewerView {
+			if err := m.clipboard.CopySelection(m.viewerContent); err == nil {
+				debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				if debugFile != nil {
+					fmt.Fprintf(debugFile, "  → COPY SUCCESSFUL\n")
+					debugFile.Close()
+				}
+				// Copied! Could show status message
+				// For now, selection clears
+				m.clipboard.ClearSelection()
+			} else {
+				debugFile, _ := os.OpenFile("/tmp/lumina_mouse_debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				if debugFile != nil {
+					fmt.Fprintf(debugFile, "  → COPY FAILED: %v\n", err)
+					debugFile.Close()
+				}
+			}
+		}
+
+	// Filter
+	case "filter":
+		if m.currentView == FileTreeView {
+			// Toggle filter - let bubbles handle it
+			if m.fileList.FilterState() != list.Filtering {
+				m.fileList.SetFilteringEnabled(true)
+			}
+		}
+
+	case "help":
+		m.transitionTo(HelpMode)
+		return m, nil
+
+	case "sort":
+		// Cycle through sort modes
+		m.cycleSortMode()
+		return m, nil
+	}
 
 	// Update components based on current view
 	if m.currentView == FileTreeView {

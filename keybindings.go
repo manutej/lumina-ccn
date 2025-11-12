@@ -52,6 +52,7 @@ func DefaultKeyBindings() KeyBindings {
 		},
 		Actions: []KeyBinding{
 			{Key: "/", Action: "filter", View: "filetree"},
+			{Key: "s", Action: "sort", View: "filetree"},
 			{Key: "?", Action: "help", View: "any"},
 			{Key: "tab", Action: "switch_view", View: "any"},
 			{Key: "y", Action: "copy", View: "viewer"},
@@ -162,6 +163,7 @@ func ExampleCustomConfig() string {
 		},
 		Actions: []KeyBinding{
 			{Key: "/", Action: "filter", View: "filetree"},
+			{Key: "s", Action: "sort", View: "filetree"},
 			{Key: "?", Action: "help", View: "any"},
 			{Key: "tab", Action: "switch_view", View: "any"},
 			{Key: "y", Action: "copy", View: "viewer"},

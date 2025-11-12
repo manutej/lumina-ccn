@@ -20,6 +20,15 @@ const (
 	PreviewView
 )
 
+// SortMode represents the file sorting mode
+type SortMode int
+
+const (
+	SortAlphabetical SortMode = iota
+	SortModifiedTime
+	SortSize
+)
+
 // UIMode represents the current UI interaction mode (State Machine)
 type UIMode int
 
@@ -43,10 +52,11 @@ const (
 
 // FileItem represents a file or directory in the file tree
 type FileItem struct {
-	path  string
-	name  string
-	isDir bool
-	size  int64
+	path    string
+	name    string
+	isDir   bool
+	size    int64
+	modTime int64 // Unix timestamp for modification time
 }
 
 // Implement list.Item interface for FileItem
@@ -122,18 +132,21 @@ type AppModel struct {
 	searchInProgress bool
 
 	// Phase 3: File Watcher State
-	fileWatcher               *FileWatcher
-	watcherActive             bool
-	fileChangedNotification   bool
-	loadingMessage            string
+	fileWatcher             *FileWatcher
+	watcherActive           bool
+	fileChangedNotification bool
+	loadingMessage          string
+
+	// Sorting
+	currentSortMode SortMode
 }
 
 // NewAppModel creates a new application model
 func NewAppModel(rootPath string) AppModel {
-	// Initialize file list
-	items := loadDirectory(rootPath)
+	// Initialize file list with default sort mode
+	items := loadDirectorySorted(rootPath, SortAlphabetical)
 	fileList := list.New(items, list.NewDefaultDelegate(), 0, 0)
-	fileList.Title = "Files"
+	fileList.Title = "Files [Alphabetical]"
 	fileList.SetShowStatusBar(false)
 	fileList.SetFilteringEnabled(true)
 
@@ -180,6 +193,8 @@ func NewAppModel(rootPath string) AppModel {
 		watcherActive:           false,
 		fileChangedNotification: false,
 		loadingMessage:          "",
+		// Sorting
+		currentSortMode: SortAlphabetical,
 		// Set default dimensions for immediate display
 		width:  120,  // Default width
 		height: 40,   // Default height
@@ -200,10 +215,11 @@ func loadDirectory(path string) []list.Item {
 	parent := filepath.Dir(path)
 	if parent != path {
 		items = append(items, FileItem{
-			path:  parent,
-			name:  "..",
-			isDir: true,
-			size:  0,
+			path:    parent,
+			name:    "..",
+			isDir:   true,
+			size:    0,
+			modTime: 0,
 		})
 	}
 
@@ -228,15 +244,174 @@ func loadDirectory(path string) []list.Item {
 		// Only show markdown files and directories
 		if entry.IsDir() || strings.HasSuffix(entry.Name(), ".md") {
 			items = append(items, FileItem{
-				path:  fullPath,
-				name:  entry.Name(),
-				isDir: entry.IsDir(),
-				size:  info.Size(),
+				path:    fullPath,
+				name:    entry.Name(),
+				isDir:   entry.IsDir(),
+				size:    info.Size(),
+				modTime: info.ModTime().Unix(),
 			})
 		}
 	}
 
 	return items
+}
+
+// loadDirectorySorted loads files from a directory and applies sorting
+func loadDirectorySorted(path string, sortMode SortMode) []list.Item {
+	items := loadDirectory(path)
+	return sortFileItems(items, sortMode)
+}
+
+// sortFileItems sorts a list of FileItems based on the specified sort mode
+// Returns the sorted slice (needed because slice modifications don't persist with local reassignment)
+func sortFileItems(items []list.Item, sortMode SortMode) []list.Item {
+	if len(items) == 0 {
+		return items
+	}
+
+	// Keep ".." parent directory at the top
+	parentIdx := -1
+	for i, item := range items {
+		if fileItem, ok := item.(FileItem); ok && fileItem.name == ".." {
+			parentIdx = i
+			break
+		}
+	}
+
+	// Extract the parent item if it exists
+	var parentItem list.Item
+	var itemsToSort []list.Item
+	if parentIdx >= 0 {
+		parentItem = items[parentIdx]
+		// Create new slice without parent
+		itemsToSort = make([]list.Item, 0, len(items)-1)
+		itemsToSort = append(itemsToSort, items[:parentIdx]...)
+		itemsToSort = append(itemsToSort, items[parentIdx+1:]...)
+	} else {
+		itemsToSort = items
+	}
+
+	// Sort based on mode
+	switch sortMode {
+	case SortAlphabetical:
+		sortAlphabetically(itemsToSort)
+	case SortModifiedTime:
+		sortByModifiedTime(itemsToSort)
+	case SortSize:
+		sortBySize(itemsToSort)
+	}
+
+	// Re-insert parent item at the top
+	if parentIdx >= 0 {
+		result := make([]list.Item, 0, len(items))
+		result = append(result, parentItem)
+		result = append(result, itemsToSort...)
+		return result
+	}
+
+	return itemsToSort
+}
+
+// sortAlphabetically sorts items alphabetically (directories first, then files)
+func sortAlphabetically(items []list.Item) {
+	for i := 0; i < len(items); i++ {
+		for j := i + 1; j < len(items); j++ {
+			item1, ok1 := items[i].(FileItem)
+			item2, ok2 := items[j].(FileItem)
+			if !ok1 || !ok2 {
+				continue
+			}
+
+			// Directories before files
+			if item1.isDir != item2.isDir {
+				if item2.isDir {
+					items[i], items[j] = items[j], items[i]
+				}
+				continue
+			}
+
+			// Alphabetical within same type
+			if strings.ToLower(item2.name) < strings.ToLower(item1.name) {
+				items[i], items[j] = items[j], items[i]
+			}
+		}
+	}
+}
+
+// sortByModifiedTime sorts items by modification time (newest first, directories first)
+func sortByModifiedTime(items []list.Item) {
+	for i := 0; i < len(items); i++ {
+		for j := i + 1; j < len(items); j++ {
+			item1, ok1 := items[i].(FileItem)
+			item2, ok2 := items[j].(FileItem)
+			if !ok1 || !ok2 {
+				continue
+			}
+
+			// Directories before files
+			if item1.isDir != item2.isDir {
+				if item2.isDir {
+					items[i], items[j] = items[j], items[i]
+				}
+				continue
+			}
+
+			// Newer items first (higher timestamp = more recent)
+			if item2.modTime > item1.modTime {
+				items[i], items[j] = items[j], items[i]
+			}
+		}
+	}
+}
+
+// sortBySize sorts items by size (largest first, directories first)
+func sortBySize(items []list.Item) {
+	for i := 0; i < len(items); i++ {
+		for j := i + 1; j < len(items); j++ {
+			item1, ok1 := items[i].(FileItem)
+			item2, ok2 := items[j].(FileItem)
+			if !ok1 || !ok2 {
+				continue
+			}
+
+			// Directories before files
+			if item1.isDir != item2.isDir {
+				if item2.isDir {
+					items[i], items[j] = items[j], items[i]
+				}
+				continue
+			}
+
+			// Larger files first
+			if item2.size > item1.size {
+				items[i], items[j] = items[j], items[i]
+			}
+		}
+	}
+}
+
+// getSortModeName returns a human-readable name for the sort mode
+func getSortModeName(sortMode SortMode) string {
+	switch sortMode {
+	case SortAlphabetical:
+		return "Alphabetical"
+	case SortModifiedTime:
+		return "Modified Time"
+	case SortSize:
+		return "Size"
+	default:
+		return "Unknown"
+	}
+}
+
+// cycleSortMode cycles to the next sort mode
+func (m *AppModel) cycleSortMode() {
+	m.currentSortMode = (m.currentSortMode + 1) % 3
+	// Reload directory with new sort mode
+	items := loadDirectorySorted(m.currentPath, m.currentSortMode)
+	m.fileList.SetItems(items)
+	// Update title to show current sort mode
+	m.fileList.Title = "Files [" + getSortModeName(m.currentSortMode) + "]"
 }
 
 // findMarkdownFiles recursively finds all markdown files in a directory
@@ -352,7 +527,7 @@ func (m *AppModel) navigateToSelectedFile() error {
 	if fileItem.isDir {
 		// Navigate into directory
 		m.currentPath = fileItem.path
-		items := loadDirectory(fileItem.path)
+		items := loadDirectorySorted(fileItem.path, m.currentSortMode)
 		m.fileList.SetItems(items)
 		return nil
 	}
@@ -371,7 +546,7 @@ func (m *AppModel) navigateUp() {
 	}
 
 	m.currentPath = parent
-	items := loadDirectory(parent)
+	items := loadDirectorySorted(parent, m.currentSortMode)
 	m.fileList.SetItems(items)
 }
 
