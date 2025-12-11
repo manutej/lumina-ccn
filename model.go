@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -126,10 +127,14 @@ type AppModel struct {
 	finderFiltered []string
 
 	// Phase 3: Ripgrep Search State (flat)
-	searchQuery      string
-	searchResults    []RipgrepResult
-	searchCursor     int
-	searchInProgress bool
+	searchQuery        string
+	searchResults      []RipgrepResult
+	searchCursor       int
+	searchInProgress   bool
+	searchPhase        int // 0 = input phase, 1 = results phase
+	searchCancel       context.CancelFunc
+	searchErrorMessage string
+	searchResultsChan  <-chan RipgrepMatch // Channel for streaming results
 
 	// Phase 3: File Watcher State
 	fileWatcher             *FileWatcher
@@ -616,8 +621,17 @@ func (m *AppModel) transitionTo(newMode UIMode) {
 		m.finderCursor = 0
 		m.finderFiltered = []string{}
 	case SearchMode:
+		// Cancel any in-progress search
+		if m.searchCancel != nil {
+			m.searchCancel()
+			m.searchCancel = nil
+		}
 		m.searchQuery = ""
 		m.searchCursor = 0
+		m.searchResults = []RipgrepResult{}
+		m.searchInProgress = false
+		m.searchPhase = 0
+		m.searchErrorMessage = ""
 	case HelpMode:
 		// No cleanup needed
 	case LoadingMode:

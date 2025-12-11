@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -36,7 +37,9 @@ type FinderCanceledMsg struct{}
 
 // Ripgrep Search Messages (Phase 3 Week 2)
 type SearchStartedMsg struct {
-	query string
+	query  string
+	ch     <-chan RipgrepMatch
+	cancel context.CancelFunc
 }
 type SearchResultMsg struct {
 	result RipgrepResult
@@ -45,6 +48,14 @@ type SearchCompletedMsg struct{}
 type SearchErrorMsg struct {
 	err error
 }
+
+// SearchInputPhase represents whether user is typing query or viewing results
+type SearchInputPhase int
+
+const (
+	SearchPhaseInput   SearchInputPhase = iota // User is typing search query
+	SearchPhaseResults                         // User is browsing results
+)
 
 // File Watcher Messages (Phase 3 Week 3)
 type FileChangedMsg struct {
@@ -74,6 +85,37 @@ func dragTimeoutCmd() tea.Cmd {
 	return tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
 		return MouseDragTimeoutMsg{}
 	})
+}
+
+// startSearchCmd initiates a ripgrep search (Milestone 2)
+func startSearchCmd(rootPath, query string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		manager := NewRipgrepManager(4)
+		ch, err := manager.Search(ctx, query)
+		if err != nil {
+			cancel()
+			return SearchErrorMsg{err: err}
+		}
+		return SearchStartedMsg{query: query, ch: ch, cancel: cancel}
+	}
+}
+
+// listenSearchResultsCmd listens for search results from ripgrep (Milestone 2)
+func listenSearchResultsCmd(ch <-chan RipgrepMatch) tea.Cmd {
+	return func() tea.Msg {
+		match, ok := <-ch
+		if !ok {
+			return SearchCompletedMsg{}
+		}
+		return SearchResultMsg{
+			result: RipgrepResult{
+				FilePath: match.Path,
+				Line:     match.LineNumber,
+				Text:     match.Text,
+			},
+		}
+	}
 }
 
 // Update handles messages and updates the model
@@ -109,13 +151,32 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case SearchStartedMsg:
+		// Search initiated - store cancel function, channel, and start listening
+		m.searchCancel = msg.cancel
+		m.searchResultsChan = msg.ch
+		m.searchInProgress = true
+		m.searchPhase = 1 // Results phase
+		return m, listenSearchResultsCmd(msg.ch)
+
 	case SearchResultMsg:
-		// Accumulate search results
+		// Accumulate search results and continue listening
 		m.searchResults = append(m.searchResults, msg.result)
+		// Continue listening for more results from stored channel
+		if m.searchResultsChan != nil && m.searchInProgress {
+			return m, listenSearchResultsCmd(m.searchResultsChan)
+		}
 		return m, nil
 
 	case SearchCompletedMsg:
 		m.searchInProgress = false
+		m.searchResultsChan = nil
+		return m, nil
+
+	case SearchErrorMsg:
+		m.searchInProgress = false
+		m.searchResultsChan = nil
+		m.searchErrorMessage = msg.err.Error()
 		return m, nil
 
 	case FileChangedMsg:
@@ -215,6 +276,40 @@ func (m AppModel) handleFinderMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m AppModel) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Phase 0: Input phase - user is typing query
+	if m.searchPhase == 0 {
+		switch msg.String() {
+		case "esc":
+			m.transitionTo(NormalMode)
+			return m, nil
+
+		case "enter":
+			// Execute search if query is not empty
+			if len(m.searchQuery) > 0 {
+				m.searchResults = []RipgrepResult{} // Clear previous results
+				m.searchCursor = 0
+				m.searchInProgress = true
+				m.searchErrorMessage = ""
+				return m, startSearchCmd(m.rootPath, m.searchQuery)
+			}
+			return m, nil
+
+		case "backspace":
+			if len(m.searchQuery) > 0 {
+				m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+			}
+			return m, nil
+
+		default:
+			// Add printable characters to query
+			if len(msg.String()) == 1 {
+				m.searchQuery += msg.String()
+			}
+			return m, nil
+		}
+	}
+
+	// Phase 1: Results phase - user is browsing results
 	switch msg.String() {
 	case "esc":
 		m.transitionTo(NormalMode)
@@ -225,9 +320,24 @@ func (m AppModel) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(m.searchResults) > 0 && m.searchCursor < len(m.searchResults) {
 			result := m.searchResults[m.searchCursor]
 			m.loadFileContent(result.FilePath)
-			// TODO: Scroll to line
+			// Scroll to the matching line
+			for i := 0; i < result.Line && i < 1000; i++ {
+				m.viewer.LineDown(1)
+			}
 			m.transitionTo(NormalMode)
 		}
+		return m, nil
+
+	case "backspace":
+		// Go back to input phase
+		m.searchPhase = 0
+		m.searchResults = []RipgrepResult{}
+		m.searchCursor = 0
+		if m.searchCancel != nil {
+			m.searchCancel()
+			m.searchCancel = nil
+		}
+		m.searchInProgress = false
 		return m, nil
 
 	case "up", "ctrl+p", "k":
@@ -673,42 +783,74 @@ func (m AppModel) renderSearchModal() string {
 		Background(lipgloss.Color("11")).
 		Bold(true)
 
+	errorStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("9")). // Red
+		Bold(true)
+
 	var content strings.Builder
 
-	// Search query input
-	content.WriteString(titleStyle.Render("🔍 Search: " + m.searchQuery))
+	// Search query input with cursor
+	if m.searchPhase == 0 {
+		content.WriteString(titleStyle.Render("🔍 Search: " + m.searchQuery + "█"))
+	} else {
+		content.WriteString(titleStyle.Render("🔍 Search: " + m.searchQuery))
+	}
 	content.WriteString("\n\n")
 
-	// Results
-	if m.searchInProgress {
-		content.WriteString(itemStyle.Render("Searching..."))
-	} else if len(m.searchResults) == 0 {
-		content.WriteString(itemStyle.Render("No results found"))
-	} else {
-		// Show up to 20 results
-		maxResults := min(20, len(m.searchResults))
-		for i := 0; i < maxResults; i++ {
-			result := m.searchResults[i]
-			line := fmt.Sprintf("%s:%d: %s", filepath.Base(result.FilePath), result.Line, result.Text)
+	// Show error message if any
+	if m.searchErrorMessage != "" {
+		content.WriteString(errorStyle.Render("Error: " + m.searchErrorMessage))
+		content.WriteString("\n\n")
+	}
 
-			if i == m.searchCursor {
-				content.WriteString(selectedItemStyle.Render("▶ " + line))
-			} else {
-				content.WriteString(itemStyle.Render("  " + line))
-			}
-			if i < maxResults-1 {
-				content.WriteString("\n")
-			}
+	// Phase 0: Input phase
+	if m.searchPhase == 0 {
+		if m.searchQuery == "" {
+			content.WriteString(itemStyle.Render("Type a search query and press Enter"))
+		} else {
+			content.WriteString(itemStyle.Render("Press Enter to search"))
 		}
+	} else {
+		// Phase 1: Results phase
+		if m.searchInProgress {
+			content.WriteString(itemStyle.Render(fmt.Sprintf("Searching... (%d results)", len(m.searchResults))))
+		} else if len(m.searchResults) == 0 {
+			content.WriteString(itemStyle.Render("No results found for \"" + m.searchQuery + "\""))
+		} else {
+			// Show up to 20 results
+			maxResults := min(20, len(m.searchResults))
+			for i := 0; i < maxResults; i++ {
+				result := m.searchResults[i]
+				// Truncate text if too long
+				text := strings.TrimSpace(result.Text)
+				if len(text) > 60 {
+					text = text[:57] + "..."
+				}
+				line := fmt.Sprintf("%s:%d: %s", filepath.Base(result.FilePath), result.Line, text)
 
-		if len(m.searchResults) > maxResults {
-			content.WriteString("\n")
-			content.WriteString(itemStyle.Render(fmt.Sprintf("  ... and %d more", len(m.searchResults)-maxResults)))
+				if i == m.searchCursor {
+					content.WriteString(selectedItemStyle.Render("▶ " + line))
+				} else {
+					content.WriteString(itemStyle.Render("  " + line))
+				}
+				if i < maxResults-1 {
+					content.WriteString("\n")
+				}
+			}
+
+			if len(m.searchResults) > maxResults {
+				content.WriteString("\n")
+				content.WriteString(itemStyle.Render(fmt.Sprintf("  ... and %d more", len(m.searchResults)-maxResults)))
+			}
 		}
 	}
 
 	content.WriteString("\n\n")
-	content.WriteString(itemStyle.Render("↑/↓: navigate | Enter: jump | n/N: next/prev | Esc: cancel"))
+	if m.searchPhase == 0 {
+		content.WriteString(itemStyle.Render("Enter: search | Esc: cancel"))
+	} else {
+		content.WriteString(itemStyle.Render("↑/↓: navigate | Enter: jump | Backspace: new search | Esc: cancel"))
+	}
 
 	return modalStyle.Render(content.String())
 }
@@ -925,7 +1067,7 @@ func (m AppModel) View() string {
 		)
 
 	case SearchMode:
-		// TODO: Implement search UI (Phase 3 Week 2)
+		// Search UI (Milestone 2 complete)
 		searchOverlay := m.renderSearchModal()
 		return lipgloss.Place(
 			m.width,
