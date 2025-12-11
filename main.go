@@ -184,12 +184,12 @@ func (m AppModel) handleFinderMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "up", "ctrl+p":
+	case "up", "ctrl+p", "k":
 		// Navigate up in results (Blocker 2: Pure function)
 		m.finderCursor = navigateCursor(m.finderCursor, -1, len(m.finderFiltered))
 		return m, nil
 
-	case "down", "ctrl+n":
+	case "down", "ctrl+n", "j":
 		// Navigate down in results (Blocker 2: Pure function)
 		m.finderCursor = navigateCursor(m.finderCursor, 1, len(m.finderFiltered))
 		return m, nil
