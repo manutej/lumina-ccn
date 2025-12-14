@@ -100,6 +100,37 @@ func (cp *ContextPanel) UpdateContent(filePath string, content string) {
 	cp.updateDocumentStats(content)
 }
 
+// UpdateJSONContent updates panel for JSON files
+func (cp *ContextPanel) UpdateJSONContent(filePath string, content string) {
+	// Clear TOC (no headings in JSON)
+	cp.toc = NewTableOfContents()
+
+	// Update File Info
+	cp.updateFileInfo(filePath, content)
+
+	// Update Document Stats for JSON
+	cp.updateJSONStats(content)
+}
+
+// updateJSONStats analyzes JSON structure
+func (cp *ContextPanel) updateJSONStats(content string) {
+	stats := &DocumentStats{
+		HeadingsByLevel: make(map[int]int),
+	}
+
+	// Count JSON-specific elements
+	stats.HeadingsByLevel[1] = strings.Count(content, "{")      // Objects
+	stats.HeadingsByLevel[2] = strings.Count(content, "[")      // Arrays
+	stats.HeadingsByLevel[3] = strings.Count(content, "\"") / 2 // Approximate string count
+	stats.CodeBlockCount = 0                                    // N/A for JSON
+	stats.LinkCount = 0
+	stats.ImageCount = 0
+	stats.ListItemCount = strings.Count(content, ",") + 1 // Approximate element count
+	stats.TableCount = 0
+
+	cp.docStats = stats
+}
+
 // updateFileInfo calculates file metadata
 func (cp *ContextPanel) updateFileInfo(filePath string, content string) {
 	info, err := os.Stat(filePath)
@@ -272,44 +303,69 @@ func (cp *ContextPanel) renderDocumentStats(width, height int, colorManager *Col
 		Foreground(lipgloss.Color("#F8F8F2"))
 
 	var lines []string
-	lines = append(lines, "📈 Document Stats\n")
 
-	// Headings
-	lines = append(lines, labelStyle.Render("Headings:"))
-	totalHeadings := 0
-	for level := 1; level <= 6; level++ {
-		count := cp.docStats.HeadingsByLevel[level]
-		if count > 0 {
-			totalHeadings += count
-			lines = append(lines, fmt.Sprintf("  H%d: %s", level, valueStyle.Render(fmt.Sprintf("%d", count))))
-		}
-	}
-	if totalHeadings == 0 {
-		lines = append(lines, "  "+valueStyle.Render("None"))
-	}
-	lines = append(lines, "")
+	// Check if this is a JSON file
+	isJSON := strings.HasSuffix(cp.fileInfo.Path, ".json")
 
-	// Other stats
-	lines = append(lines, labelStyle.Render("Code Blocks:"))
-	lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.CodeBlockCount)))
-	lines = append(lines, "")
+	if isJSON {
+		lines = append(lines, "📊 JSON Stats\n")
 
-	lines = append(lines, labelStyle.Render("Links:"))
-	lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.LinkCount)))
-	lines = append(lines, "")
-
-	lines = append(lines, labelStyle.Render("Images:"))
-	lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.ImageCount)))
-	lines = append(lines, "")
-
-	lines = append(lines, labelStyle.Render("List Items:"))
-	lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.ListItemCount)))
-	lines = append(lines, "")
-
-	if cp.docStats.TableCount > 0 {
-		lines = append(lines, labelStyle.Render("Table Rows:"))
-		lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.TableCount)))
+		// JSON-specific stats
+		lines = append(lines, labelStyle.Render("Objects:"))
+		lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.HeadingsByLevel[1])))
 		lines = append(lines, "")
+
+		lines = append(lines, labelStyle.Render("Arrays:"))
+		lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.HeadingsByLevel[2])))
+		lines = append(lines, "")
+
+		lines = append(lines, labelStyle.Render("Strings (approx):"))
+		lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.HeadingsByLevel[3])))
+		lines = append(lines, "")
+
+		lines = append(lines, labelStyle.Render("Elements (approx):"))
+		lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.ListItemCount)))
+		lines = append(lines, "")
+	} else {
+		lines = append(lines, "📈 Document Stats\n")
+
+		// Headings
+		lines = append(lines, labelStyle.Render("Headings:"))
+		totalHeadings := 0
+		for level := 1; level <= 6; level++ {
+			count := cp.docStats.HeadingsByLevel[level]
+			if count > 0 {
+				totalHeadings += count
+				lines = append(lines, fmt.Sprintf("  H%d: %s", level, valueStyle.Render(fmt.Sprintf("%d", count))))
+			}
+		}
+		if totalHeadings == 0 {
+			lines = append(lines, "  "+valueStyle.Render("None"))
+		}
+		lines = append(lines, "")
+
+		// Other stats
+		lines = append(lines, labelStyle.Render("Code Blocks:"))
+		lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.CodeBlockCount)))
+		lines = append(lines, "")
+
+		lines = append(lines, labelStyle.Render("Links:"))
+		lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.LinkCount)))
+		lines = append(lines, "")
+
+		lines = append(lines, labelStyle.Render("Images:"))
+		lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.ImageCount)))
+		lines = append(lines, "")
+
+		lines = append(lines, labelStyle.Render("List Items:"))
+		lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.ListItemCount)))
+		lines = append(lines, "")
+
+		if cp.docStats.TableCount > 0 {
+			lines = append(lines, labelStyle.Render("Table Rows:"))
+			lines = append(lines, "  "+valueStyle.Render(fmt.Sprintf("%d", cp.docStats.TableCount)))
+			lines = append(lines, "")
+		}
 	}
 
 	lines = append(lines, "")

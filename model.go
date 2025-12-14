@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -246,8 +248,8 @@ func loadDirectory(path string) []list.Item {
 
 		fullPath := filepath.Join(path, entry.Name())
 
-		// Only show markdown files and directories
-		if entry.IsDir() || strings.HasSuffix(entry.Name(), ".md") {
+		// Only show markdown files, JSON files, and directories
+		if entry.IsDir() || strings.HasSuffix(entry.Name(), ".md") || strings.HasSuffix(entry.Name(), ".json") {
 			items = append(items, FileItem{
 				path:    fullPath,
 				name:    entry.Name(),
@@ -419,7 +421,7 @@ func (m *AppModel) cycleSortMode() {
 	m.fileList.Title = "Files [" + getSortModeName(m.currentSortMode) + "]"
 }
 
-// findMarkdownFiles recursively finds all markdown files in a directory
+// findMarkdownFiles recursively finds all markdown and JSON files in a directory
 func findMarkdownFiles(rootPath string) []string {
 	var files []string
 
@@ -433,8 +435,8 @@ func findMarkdownFiles(rootPath string) []string {
 			return filepath.SkipDir
 		}
 
-		// Add markdown files
-		if !d.IsDir() && strings.HasSuffix(d.Name(), ".md") {
+		// Add markdown and JSON files
+		if !d.IsDir() && (strings.HasSuffix(d.Name(), ".md") || strings.HasSuffix(d.Name(), ".json")) {
 			files = append(files, path)
 		}
 
@@ -505,8 +507,30 @@ func (m *AppModel) loadFileContent(path string) error {
 		if m.contextPanel != nil {
 			m.contextPanel.UpdateContent(path, m.viewerContent)
 		}
+	} else if strings.HasSuffix(path, ".json") {
+		// For JSON files, pretty-print with indentation
+		formatted := formatJSON(m.viewerContent)
+
+		// Wrap in markdown code block for syntax highlighting via Glamour
+		if m.markdownRenderer != nil {
+			markdownWrapped := "```json\n" + formatted + "\n```"
+			rendered, err := m.markdownRenderer.Render(markdownWrapped)
+			if err != nil {
+				m.renderedContent = formatted
+			} else {
+				m.renderedContent = rendered
+			}
+		} else {
+			m.renderedContent = formatted
+		}
+		m.viewer.SetContent(m.renderedContent)
+
+		// Update context panel with JSON info
+		if m.contextPanel != nil {
+			m.contextPanel.UpdateJSONContent(path, m.viewerContent)
+		}
 	} else {
-		// For non-markdown files, show plain text
+		// For other files, show plain text
 		m.renderedContent = m.viewerContent
 		m.viewer.SetContent(m.viewerContent)
 
@@ -518,6 +542,17 @@ func (m *AppModel) loadFileContent(path string) error {
 
 	m.viewer.GotoTop()
 	return nil
+}
+
+// formatJSON formats a JSON string with pretty indentation
+func formatJSON(input string) string {
+	var prettyJSON bytes.Buffer
+	err := json.Indent(&prettyJSON, []byte(input), "", "  ")
+	if err != nil {
+		// If JSON is invalid, return as-is
+		return input
+	}
+	return prettyJSON.String()
 }
 
 // navigateToSelectedFile navigates to the currently selected file

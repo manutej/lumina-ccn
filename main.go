@@ -280,7 +280,7 @@ func (m AppModel) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.searchPhase == 0 {
 		switch msg.String() {
 		case "esc":
-			m.transitionTo(NormalMode)
+			m.currentMode = NormalMode
 			return m, nil
 
 		case "enter":
@@ -301,7 +301,8 @@ func (m AppModel) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		default:
-			// Add printable characters to query
+			// Add character to input if it's a single printable character
+			// (same pattern as finder which works)
 			if len(msg.String()) == 1 {
 				m.searchQuery += msg.String()
 			}
@@ -312,7 +313,7 @@ func (m AppModel) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Phase 1: Results phase - user is browsing results
 	switch msg.String() {
 	case "esc":
-		m.transitionTo(NormalMode)
+		m.currentMode = NormalMode
 		return m, nil
 
 	case "enter":
@@ -324,7 +325,7 @@ func (m AppModel) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			for i := 0; i < result.Line && i < 1000; i++ {
 				m.viewer.LineDown(1)
 			}
-			m.transitionTo(NormalMode)
+			m.currentMode = NormalMode
 		}
 		return m, nil
 
@@ -395,8 +396,13 @@ func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "ctrl+f":
-		// Activate search
-		m.transitionTo(SearchMode)
+		// Activate ripgrep content search
+		m.currentMode = SearchMode
+		m.searchPhase = 0
+		m.searchQuery = ""
+		m.searchResults = []RipgrepResult{}
+		m.searchCursor = 0
+		m.searchErrorMessage = ""
 		return m, nil
 	}
 
