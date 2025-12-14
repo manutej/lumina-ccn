@@ -1,10 +1,10 @@
 # Lumina (CCN) - Progress Tracker
 
 **Project**: Claude Code Navigator (CCN)
-**Status**: Phase 3 In Progress (Milestones 1-2 Complete)
-**Last Updated**: 2025-12-11
-**Version**: 1.4.1-alpha
-**Branch**: `feature/phase-3-ui-integration`
+**Status**: Phase 3 In Progress (Milestones 1-3 Complete)
+**Last Updated**: 2025-12-14
+**Version**: 1.4.2-alpha
+**Branch**: `development/v1.4.1-sorting`
 
 ---
 
@@ -34,7 +34,7 @@
 | **M1: Fuzzy Finder UI** | Complete | 18 | `/` trigger, async loading, fuzzy filter, modal overlay |
 | **M2: Ripgrep Search UI** | Complete | 15 | `Ctrl+F` trigger, streaming results, navigation |
 | **M2.5: JSON File Support** | Complete | 4 | Pretty-print JSON, syntax highlighting, JSON stats |
-| **M3: File Watcher UI** | Pending | - | Auto-reload, change detection, visual indicators |
+| **M3: File Watcher UI** | Complete | 5 | Auto-reload, change detection, visual indicators |
 | **M4: Polish & Docs** | Pending | - | Help updates, documentation pass |
 
 ### Milestone Details
@@ -70,11 +70,15 @@
   - Elements (approx)
 - **4 tests passing**
 
-#### M3: File Watcher UI - PENDING
+#### M3: File Watcher UI - COMPLETE (Dec 14, 2025)
 - Auto-reload when file changes on disk
-- Visual indicator for modified files
+- Visual indicator `[RELOADED]` in header when file updated
+- Visual indicator `[WATCHING]` when watcher is active
 - Preserve scroll position on reload
 - Debounced updates (500ms)
+- Watcher starts automatically when opening files
+- Notification clears on user scroll interaction
+- **5 tests passing**
 
 #### M4: Polish & Documentation - PENDING
 - Update help overlay with new keybindings
@@ -92,7 +96,8 @@
 | Ripgrep Search | 15 | Pass |
 | JSON Support | 4 | Pass |
 | Ctrl+F Integration | 3 | Pass |
-| **Total** | **40+** | **All Pass** |
+| File Watcher UI | 5 | Pass |
+| **Total** | **45+** | **All Pass** |
 
 ---
 
@@ -120,6 +125,12 @@
 - `m` - Cycle modes (TOC, Info, Stats, Actions)
 - Document stats for markdown
 - JSON stats for JSON files
+
+### File Watching
+- Auto-reload when file changes on disk
+- `[WATCHING]` indicator in header when active
+- `[RELOADED]` indicator when file updated
+- Scroll position preserved on reload
 
 ---
 
@@ -194,9 +205,9 @@ go build -o ccn
 ## Next Steps
 
 ### Immediate
-1. [ ] Complete Milestone 3: File Watcher UI
-2. [ ] Update help overlay with Ctrl+F
-3. [ ] Test JSON viewing with real files
+1. [x] Complete Milestone 3: File Watcher UI
+2. [ ] Update help overlay with Ctrl+F and file watcher info
+3. [ ] Update README with Phase 3 features
 
 ### After Phase 3
 - [ ] Phase 4: Editor integration
@@ -209,6 +220,7 @@ go build -o ccn
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| Dec 14 | Complete File Watcher UI | Auto-reload with visual indicators and scroll preservation |
 | Dec 11 | Add JSON file support | User requested to view JSON outputs in LUMINA |
 | Dec 11 | Pretty-print + syntax highlight | Better readability for JSON files |
 | Nov 11 | Backend-first approach | Test backends before UI integration |
@@ -216,6 +228,6 @@ go build -o ccn
 
 ---
 
-**Last Updated**: 2025-12-11 21:30 PST
+**Last Updated**: 2025-12-14
 **Next Review**: End of Phase 3
-**Status**: On Track
+**Status**: On Track - M1-M3 Complete, M4 (Polish) Pending

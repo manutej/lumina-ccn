@@ -57,12 +57,18 @@ const (
 	SearchPhaseResults                         // User is browsing results
 )
 
-// File Watcher Messages (Phase 3 Week 3)
+// File Watcher Messages (Phase 3 Milestone 3)
 type FileChangedMsg struct {
 	path string
 }
 type FileReloadMsg struct {
 	content string
+}
+type FileWatcherStartedMsg struct {
+	watcher FileWatcher
+}
+type FileWatcherErrorMsg struct {
+	err error
 }
 
 // Init initializes the model
@@ -115,6 +121,38 @@ func listenSearchResultsCmd(ch <-chan RipgrepMatch) tea.Cmd {
 				Text:     match.Text,
 			},
 		}
+	}
+}
+
+// File Watcher Commands (Milestone 3)
+
+// startFileWatcherCmd creates and starts a file watcher for the given directory
+// It closes any existing watcher before creating a new one
+func startFileWatcherCmd(dirPath string) tea.Cmd {
+	return func() tea.Msg {
+		watcher := NewFileWatcher()
+		if watcher == nil {
+			return FileWatcherErrorMsg{err: fmt.Errorf("failed to create file watcher")}
+		}
+		// Set debounce to 500ms to avoid rapid-fire reloads
+		watcher.SetDebounce(500 * time.Millisecond)
+		err := watcher.Watch(dirPath)
+		if err != nil {
+			return FileWatcherErrorMsg{err: err}
+		}
+		return FileWatcherStartedMsg{watcher: watcher}
+	}
+}
+
+// listenFileChangesCmd listens for file change notifications
+func listenFileChangesCmd(watcher FileWatcher) tea.Cmd {
+	return func() tea.Msg {
+		ch := watcher.Changes()
+		path, ok := <-ch
+		if !ok {
+			return nil // Watcher closed
+		}
+		return FileChangedMsg{path: path}
 	}
 }
 
@@ -179,10 +217,39 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.searchErrorMessage = msg.err.Error()
 		return m, nil
 
+	case FileWatcherStartedMsg:
+		// Close existing watcher if any
+		if m.fileWatcher != nil && m.watcherActive {
+			(*m.fileWatcher).Close()
+		}
+		// Store new watcher and start listening for changes
+		fw := msg.watcher
+		m.fileWatcher = &fw
+		m.watcherActive = true
+		return m, listenFileChangesCmd(msg.watcher)
+
+	case FileWatcherErrorMsg:
+		// Log error but continue (watcher is optional)
+		m.watcherActive = false
+		return m, nil
+
 	case FileChangedMsg:
-		// Reload file when changed
+		// Check if the changed file is currently displayed
 		if m.selectedFile == msg.path {
+			// Preserve scroll position
+			scrollPos := m.viewer.YOffset
+			// Reload file content
 			m.loadFileContent(msg.path)
+			// Restore scroll position (with bounds check)
+			if scrollPos > 0 && scrollPos < m.viewer.TotalLineCount() {
+				m.viewer.SetYOffset(scrollPos)
+			}
+			// Set notification flag for visual indicator
+			m.fileChangedNotification = true
+		}
+		// Continue listening for more changes
+		if m.fileWatcher != nil && m.watcherActive {
+			return m, listenFileChangesCmd(*m.fileWatcher)
 		}
 		return m, nil
 
@@ -238,9 +305,12 @@ func (m AppModel) handleFinderMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(m.finderFiltered) > 0 && m.finderCursor < len(m.finderFiltered) {
 			selected := m.finderFiltered[m.finderCursor]
 			m.transitionTo(NormalMode)
-			// Load the selected file
+			// Load the selected file and start watcher
 			if err := m.loadFileContent(selected); err == nil {
-				// Successfully loaded file
+				// Clear change notification on new file load
+				m.fileChangedNotification = false
+				// Start file watcher for the file's directory
+				return m, startFileWatcherCmd(filepath.Dir(selected))
 			}
 		}
 		return m, nil
@@ -326,6 +396,9 @@ func (m AppModel) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.viewer.LineDown(1)
 			}
 			m.currentMode = NormalMode
+			// Clear change notification and start watcher
+			m.fileChangedNotification = false
+			return m, startFileWatcherCmd(filepath.Dir(result.FilePath))
 		}
 		return m, nil
 
@@ -463,35 +536,41 @@ func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.contextPanel.GetTOC().SelectPrevious()
 		}
 
-	// Viewer scrolling
+	// Viewer scrolling (clear reload notification on any scroll)
 	case "scroll_down":
 		if m.currentView == ViewerView {
 			m.viewer.LineDown(1)
+			m.fileChangedNotification = false
 		}
 
 	case "scroll_up":
 		if m.currentView == ViewerView {
 			m.viewer.LineUp(1)
+			m.fileChangedNotification = false
 		}
 
 	case "page_down":
 		if m.currentView == ViewerView {
 			m.viewer.HalfViewDown()
+			m.fileChangedNotification = false
 		}
 
 	case "page_up":
 		if m.currentView == ViewerView {
 			m.viewer.HalfViewUp()
+			m.fileChangedNotification = false
 		}
 
 	case "view_down":
 		if m.currentView == ViewerView {
 			m.viewer.ViewDown()
+			m.fileChangedNotification = false
 		}
 
 	case "view_up":
 		if m.currentView == ViewerView {
 			m.viewer.ViewUp()
+			m.fileChangedNotification = false
 		}
 
 	case "top":
@@ -518,7 +597,20 @@ func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "open":
 		// File tree: navigate into file/directory
 		if m.currentView == FileTreeView {
+			// Get selected item before navigation
+			var filePath string
+			if item := m.fileList.SelectedItem(); item != nil {
+				fileItem := item.(FileItem)
+				if !fileItem.isDir {
+					filePath = fileItem.path
+				}
+			}
 			m.navigateToSelectedFile()
+			// If a file was opened (not a directory), start watcher
+			if filePath != "" && m.selectedFile == filePath {
+				m.fileChangedNotification = false
+				return m, startFileWatcherCmd(filepath.Dir(filePath))
+			}
 			// Context Panel: Jump to selected TOC entry in viewer
 		} else if m.currentView == PreviewView && m.contextPanel.currentMode == TOCMode {
 			if entry := m.contextPanel.GetTOC().GetSelectedEntry(); entry != nil {
@@ -949,8 +1041,16 @@ func (m AppModel) View() string {
 		BorderForeground(lipgloss.Color(m.colorManager.GetColor("active-border"))).
 		Bold(true)
 
-	// Header
-	title := titleStyle.Render("Claude Code Navigator (CCN) - " + filepath.Base(m.currentPath))
+	// Header with file change indicator
+	headerText := "Claude Code Navigator (CCN) - " + filepath.Base(m.currentPath)
+	if m.fileChangedNotification && m.selectedFile != "" {
+		// Add visual indicator that file was auto-reloaded
+		headerText += " [RELOADED]"
+	}
+	if m.watcherActive {
+		headerText += " [WATCHING]"
+	}
+	title := titleStyle.Render(headerText)
 
 	// File tree pane
 	fileTreeStyle := paneStyle
