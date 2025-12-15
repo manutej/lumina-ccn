@@ -202,7 +202,10 @@ func printKeyboardShortcuts() {
 	shortcuts.WriteString("             Go to top of file\n")
 	shortcuts.WriteString("  ")
 	shortcuts.WriteString(keyStyle.Render("G"))
-	shortcuts.WriteString("             Go to bottom of file\n\n")
+	shortcuts.WriteString("             Go to bottom of file\n")
+	shortcuts.WriteString("  ")
+	shortcuts.WriteString(keyStyle.Render("e"))
+	shortcuts.WriteString("             Edit file in $EDITOR (vim by default)\n\n")
 
 	// Context Panel (Right Pane)
 	shortcuts.WriteString(headerStyle.Render("CONTEXT PANEL (Right Pane)"))
@@ -365,7 +368,10 @@ func getHelpOverlay(width, height int, colorManager *ColorManager) string {
 	content.WriteString("       Half page down/up\n")
 	content.WriteString("  ")
 	content.WriteString(keyStyle.Render("g/G"))
-	content.WriteString("       Top/bottom\n\n")
+	content.WriteString("       Top/bottom\n")
+	content.WriteString("  ")
+	content.WriteString(keyStyle.Render("e"))
+	content.WriteString("         Edit in $EDITOR\n\n")
 
 	content.WriteString("CONTEXT PANEL\n")
 	content.WriteString("  ")

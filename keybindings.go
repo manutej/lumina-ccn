@@ -56,6 +56,7 @@ func DefaultKeyBindings() KeyBindings {
 			{Key: "?", Action: "help", View: "any"},
 			{Key: "tab", Action: "switch_view", View: "any"},
 			{Key: "y", Action: "copy", View: "viewer"},
+			{Key: "e", Action: "edit", View: "viewer"},
 		},
 		AppControls: []KeyBinding{
 			{Key: "q", Action: "quit", View: "any"},

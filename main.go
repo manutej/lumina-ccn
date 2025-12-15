@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -71,6 +72,12 @@ type FileWatcherErrorMsg struct {
 	err error
 }
 
+// Editor Messages (Phase 4)
+type EditorClosedMsg struct {
+	err  error
+	path string
+}
+
 // Init initializes the model
 func (m AppModel) Init() tea.Cmd {
 	return nil
@@ -122,6 +129,22 @@ func listenSearchResultsCmd(ch <-chan RipgrepMatch) tea.Cmd {
 			},
 		}
 	}
+}
+
+// Editor Commands (Phase 4)
+
+// openInEditorCmd opens a file in the user's preferred editor ($EDITOR)
+// Uses tea.ExecProcess to suspend the TUI during editing
+func openInEditorCmd(filePath string) tea.Cmd {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		// Fallback chain: vim -> vi -> nano
+		editor = "vim"
+	}
+	c := exec.Command(editor, filePath)
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return EditorClosedMsg{err: err, path: filePath}
+	})
 }
 
 // File Watcher Commands (Milestone 3)
@@ -250,6 +273,22 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Continue listening for more changes
 		if m.fileWatcher != nil && m.watcherActive {
 			return m, listenFileChangesCmd(*m.fileWatcher)
+		}
+		return m, nil
+
+	case EditorClosedMsg:
+		// Editor closed - reload file if it was modified
+		if msg.err == nil && msg.path != "" {
+			// Preserve scroll position
+			scrollPos := m.viewer.YOffset
+			// Reload the file content
+			m.loadFileContent(msg.path)
+			// Restore scroll position (with bounds check)
+			if scrollPos > 0 && scrollPos < m.viewer.TotalLineCount() {
+				m.viewer.SetYOffset(scrollPos)
+			}
+			// Show reload notification briefly
+			m.fileChangedNotification = true
 		}
 		return m, nil
 
@@ -649,6 +688,12 @@ func (m AppModel) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					debugFile.Close()
 				}
 			}
+		}
+
+	// Edit - Open in external editor (Phase 4)
+	case "edit":
+		if m.currentView == ViewerView && m.selectedFile != "" {
+			return m, openInEditorCmd(m.selectedFile)
 		}
 
 	// Filter
