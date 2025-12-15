@@ -60,3 +60,68 @@ func TestSearchModeTyping(t *testing.T) {
 		t.Errorf("Expected searchQuery='tes', got %q", m.searchQuery)
 	}
 }
+
+func TestSearchModePaste(t *testing.T) {
+	// Create model and enter search mode
+	m := AppModel{
+		currentMode: NormalMode,
+		width:       120,
+		height:      40,
+		ready:       true,
+	}
+
+	// Enter search mode
+	ctrlF := tea.KeyMsg{Type: tea.KeyCtrlF}
+	result, _ := m.Update(ctrlF)
+	m = result.(AppModel)
+
+	if m.currentMode != SearchMode {
+		t.Fatalf("Expected SearchMode, got %d", m.currentMode)
+	}
+
+	// Simulate paste - multiple runes in a single KeyMsg
+	pasteMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hello world")}
+	result, _ = m.Update(pasteMsg)
+	m = result.(AppModel)
+
+	if m.searchQuery != "hello world" {
+		t.Errorf("Expected searchQuery='hello world', got %q", m.searchQuery)
+	}
+
+	// Type another character to verify normal typing still works after paste
+	keyX := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'!'}}
+	result, _ = m.Update(keyX)
+	m = result.(AppModel)
+
+	if m.searchQuery != "hello world!" {
+		t.Errorf("Expected searchQuery='hello world!', got %q", m.searchQuery)
+	}
+}
+
+func TestFinderModePaste(t *testing.T) {
+	// Create model already in finder mode with files loaded
+	// (simulating after async file collection completes)
+	m := AppModel{
+		currentMode:    FinderMode,
+		width:          120,
+		height:         40,
+		ready:          true,
+		finderItems:    []string{"README.md", "main.go", "model.go", "test_file.go"},
+		finderFiltered: []string{"README.md", "main.go", "model.go", "test_file.go"},
+		finderInput:    "",
+	}
+
+	// Simulate paste - multiple runes
+	pasteMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("main")}
+	result, _ := m.Update(pasteMsg)
+	m = result.(AppModel)
+
+	if m.finderInput != "main" {
+		t.Errorf("Expected finderInput='main', got %q", m.finderInput)
+	}
+
+	// Verify filtering worked
+	if len(m.finderFiltered) != 1 || m.finderFiltered[0] != "main.go" {
+		t.Errorf("Expected filtered to contain only 'main.go', got %v", m.finderFiltered)
+	}
+}

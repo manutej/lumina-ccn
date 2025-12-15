@@ -335,9 +335,9 @@ func (m AppModel) handleFinderMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	default:
-		// Add character to input if it's a single printable character
-		if len(msg.String()) == 1 {
-			m.finderInput += msg.String()
+		// Add characters to input - supports both single chars and paste (multiple runes)
+		if len(msg.Runes) > 0 {
+			m.finderInput += string(msg.Runes)
 			m.finderFiltered = filterItems(m.finderItems, m.finderInput) // Blocker 2: Pure function
 			m.finderCursor = 0                                           // Reset cursor to top
 		}
@@ -371,10 +371,9 @@ func (m AppModel) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		default:
-			// Add character to input if it's a single printable character
-			// (same pattern as finder which works)
-			if len(msg.String()) == 1 {
-				m.searchQuery += msg.String()
+			// Add characters to input - supports both single chars and paste (multiple runes)
+			if len(msg.Runes) > 0 {
+				m.searchQuery += string(msg.Runes)
 			}
 			return m, nil
 		}
