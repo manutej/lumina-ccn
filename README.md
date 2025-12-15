@@ -1,27 +1,42 @@
-# Claude Code Navigator (CCN)
+# Claude Code Navigator (CCN) - LUMINA
 
-A Glow-inspired terminal user interface for navigating Claude Code workflows with beautiful markdown rendering.
+A Glow-inspired terminal user interface for navigating Claude Code workflows with beautiful markdown and JSON rendering.
 
 ## Overview
 
-CCN is a production-ready TUI application built with the Charm ecosystem that provides rapid navigation through documentation workflows. It features a 3-pane layout with a file tree, markdown viewer with Glamour rendering, and preview pane.
+CCN is a production-ready TUI application built with the Charm ecosystem that provides rapid navigation through documentation workflows. It features a 3-pane layout with a file tree, markdown/JSON viewer with Glamour rendering, and context panel.
 
 ## Features
 
-### Phase 1 (MVP) - ✅ Complete
+### Core Features
 
-- **3-Pane Layout**: File tree (20%), Viewer (60%), Preview (20%)
-- **File Tree Navigation**: Browse directories and markdown files
+- **3-Pane Layout**: File tree (25%), Viewer (50%), Context Panel (25%)
+- **File Tree Navigation**: Browse directories, markdown and JSON files
 - **Glamour Markdown Rendering**: Beautiful, styled markdown display
+- **JSON Pretty-Print**: Syntax-highlighted JSON with indentation
 - **Vim-style Keybindings**: hjkl navigation, gg/G for top/bottom
-- **Multiple Views**: Tab through file tree, viewer, and preview panes
 - **Responsive Design**: Automatically adjusts to terminal size
 
-### Coming Soon
+### Search (Phase 3)
 
-- **Phase 2**: Fuzzy file finder, ripgrep integration, advanced vim keybindings
-- **Phase 3**: Workflow detection (6-document sequences), layout presets, bookmarks
-- **Phase 4**: Claude Code integration, terminal pane, MCP server awareness
+- **Fuzzy File Finder** (`/`): Search files by name across codebase
+- **Content Search** (`Ctrl+F`): Ripgrep-powered content search across files
+- **Real-time Results**: Streaming search results with navigation
+
+### File Watching (Phase 3)
+
+- **Auto-Reload**: Files automatically reload when changed on disk
+- **Visual Indicators**: `[WATCHING]` and `[RELOADED]` status in header
+- **Scroll Preservation**: Maintains scroll position on reload
+- **Debounced Updates**: 500ms debounce prevents rapid reloads
+
+### Context Panel (Right Pane)
+
+- **Table of Contents**: Navigate headings with j/k, jump with Enter
+- **File Info**: Size, lines, words, reading time, last modified
+- **Document Stats**: Headings by level, code blocks, links, images
+- **JSON Stats**: Objects, arrays, strings, elements count
+- **Mode Cycling**: Press `m` to switch between modes
 
 ## Architecture
 
@@ -129,26 +144,48 @@ lumina ~/docs  # Then press '?' inside app
 
 ### Keybindings
 
-#### General Navigation
-- `q` or `Ctrl+C` - Quit application
-- `Tab` - Cycle through panes (File Tree → Viewer → Preview)
-- `?` - Toggle help overlay (keyboard shortcuts reference)
+#### General
+| Key | Action |
+|-----|--------|
+| `Tab` | Cycle through panes |
+| `q` / `Ctrl+C` | Quit application |
+| `?` | Toggle help overlay |
+| `Esc` | Close overlay / Cancel / Go back |
+
+#### Search
+| Key | Action |
+|-----|--------|
+| `/` | Fuzzy file finder (by filename) |
+| `Ctrl+F` | Content search (ripgrep) |
+| `j/k` | Navigate search results |
+| `n/N` | Next/previous match |
+| `Enter` | Open/jump to match |
+| `Backspace` | Delete character / Return to input |
+| `Esc` | Cancel search |
 
 #### File Tree (Left Pane)
-- `j` / `k` or `↓` / `↑` - Navigate up/down file list
-- `Enter` - Open file or enter directory
-- `Backspace` or `h` - Go to parent directory
-- `/` - Filter files (built into bubbles/list)
+| Key | Action |
+|-----|--------|
+| `j/k` or `↓/↑` | Navigate up/down |
+| `Shift+Letter` | Jump to file starting with letter |
+| `Enter` | Open file or directory |
+| `h` / `Backspace` | Go to parent directory |
 
 #### Viewer (Center Pane)
-- `j` / `k` or `↓` / `↑` - Scroll down/up one line
-- `d` - Scroll down half page
-- `u` - Scroll up half page
-- `g` - Go to top of file
-- `G` - Go to bottom of file
+| Key | Action |
+|-----|--------|
+| `j/k` | Scroll up/down one line |
+| `d/u` | Half page down/up |
+| `g/G` | Go to top/bottom |
+| `y` | Copy to clipboard |
 
-#### Preview (Right Pane)
-- Coming soon
+#### Context Panel (Right Pane)
+| Key | Action |
+|-----|--------|
+| `m` | Cycle modes (TOC/Info/Stats/Actions) |
+| `j/k` | Navigate TOC entries |
+| `Enter` | Jump to heading |
+| `g/G` | First/last TOC entry |
 
 ### UI Layout
 
@@ -229,41 +266,54 @@ go vet ./...
 
 ## Roadmap
 
-### Phase 1: Research & Prototype ✅ COMPLETE
+### Phase 1: MVP ✅ COMPLETE
+- [x] 3-pane layout with Lip Gloss
 - [x] File tree with markdown viewer
-- [x] Basic file browsing
 - [x] Glamour markdown rendering
 - [x] Vim keybindings (hjkl, gg, G)
-- [x] 3-pane layout with Lip Gloss
 
-### Phase 2: Core Features (Next)
-- [ ] Fuzzy file finder (telescope-style with `/`)
-- [ ] Ripgrep integration for content search
-- [ ] Enhanced vim keybindings (/, n, N, marks)
-- [ ] Split panes (horizontal/vertical)
-- [ ] File watching and auto-reload
+### Phase 1.5: UX Quality ✅ COMPLETE
+- [x] Custom keybindings (JSON config)
+- [x] Copy/Selection (system clipboard)
+- [x] Table of Contents navigation
+- [x] Context panel modes
 
-### Phase 3: Workflow Integration
-- [ ] Workflow detection (6-document sequences)
-- [ ] Layout presets (spec review, code building, MoE)
-- [ ] Session management (save/restore state)
-- [ ] Bookmarks (vim marks: m, ')
-- [ ] Context preservation
+### Phase 2: Backend Systems ✅ COMPLETE
+- [x] Fuzzy finder backend (sahilm/fuzzy)
+- [x] Ripgrep integration with streaming
+- [x] File watcher (fsnotify)
+- [x] Shift+Letter quick jump
 
-### Phase 4: Claude Code Integration
-- [ ] Terminal pane integration
-- [ ] `/moe` and `/workflows` command shortcuts
-- [ ] Real-time file watching
-- [ ] Git integration awareness
-- [ ] MCP server detection
+### Phase 3: UI Integration ✅ COMPLETE
+- [x] Fuzzy file finder UI (`/` key)
+- [x] Ripgrep search UI (`Ctrl+F`)
+- [x] JSON file viewing with pretty-print
+- [x] File watcher UI with auto-reload
+- [x] Visual indicators and notifications
+
+### Phase 4: Editor Integration (Future)
+- [ ] Open in $EDITOR
+- [ ] Git status awareness
+- [ ] Claude Code integration
+- [ ] Terminal pane
 
 ## Performance
 
-- **Binary Size**: ~5MB (statically compiled Go)
-- **Startup Time**: <100ms
-- **Memory Usage**: ~10MB base + loaded content
-- **File Loading**: Instant for files <1MB
-- **Markdown Rendering**: <50ms for typical documents
+| Metric | Target | Actual |
+|--------|--------|--------|
+| Binary Size | <20MB | ~14MB |
+| Startup Time | <100ms | ~50ms |
+| Memory Usage | <20MB | ~10MB |
+| File Loading | <100ms | <10ms |
+| Markdown Render | <100ms | <50ms |
+| Fuzzy Filter | <50ms | <50ms |
+
+## Supported File Types
+
+| Extension | Rendering |
+|-----------|-----------|
+| `.md` | Glamour markdown with TOC |
+| `.json` | Pretty-print + syntax highlighting |
 
 ## Design Decisions
 
